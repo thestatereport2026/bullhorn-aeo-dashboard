@@ -1659,6 +1659,10 @@ function buildDateAxis(){
 }
 
 let ROSTER = [], ENTITIES = [], aggRowsCache = [], PROMPTS = [], PROMPTS_BY_RACE = {}, PROMPT_NARR_TESTED = {}, CITATION_EVENTS = [];
+// Narrative Topic Comparison used to rescan every raw score row once for every plotted group.
+// The chart only needs score-bucket counts, so keep a compact date-aware cube and make filter
+// changes proportional to selected races × report dates rather than the full score corpus.
+let TOPIC_COMPARISON_INDEX = null;
 let RUN_INDEX = {}, PROMPT_INDEX = {}, ROW_BY_ID = {}, ACC_ISSUES_BY_ROW = {}, NARR_GAPS_BY_ROW = {};
 let METRICS = {};
 
@@ -1976,6 +1980,7 @@ function buildFromFetchedData(){
   PROMPTS.forEach(p=>{ (PROMPTS_BY_RACE[p.raceIdx] = PROMPTS_BY_RACE[p.raceIdx]||[]).push(p); });
   PROMPT_NARR_TESTED = {};
   PROMPTS.forEach(p=>{ if(p.narrativeTested.length) PROMPT_NARR_TESTED[p.id] = p.narrativeTested; });
+  TOPIC_COMPARISON_INDEX = null;
 
   buildFilterOptionLists();
   buildMetrics();
@@ -3448,7 +3453,7 @@ function topicComparisonHtml(){
   return `<div class="card section-gap">
     <div class="card-title">Topic Comparison</div>
     <div class="card-caption">Pick a topic to see the real Narrative Alignment score breakdown for Democrats vs. Republicans (or one candidate vs. their opponent, if a race is selected). Covers policy topics, Fair Rebuttal, Critique-Association, and narrative-framing topics like Moderatism or Who Is Better.</div>
-    ${chartFilterBarHtml('tc', {})}
+    ${chartFilterBarHtml('tc', {dateRange:true})}
     <div class="subfilter-row" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;align-items:flex-end;">
       <div class="fitem"><label title="District = U.S. House races only. Statewide = Secretary of State, Supreme Court, Court of Appeals. Local = everything else, including county/city judicial races (a 'District Court Judge' race is still Local, not District).">Race level</label><select id="tc-level">${selectOptions(ALL_LEVELS,'All')}</select></div>
       <div class="fitem"><label>Topic</label><select id="tc-topic"><option value="">Select a topic…</option>${narrativeTestedTopics().map(t=>opt(t,t)).join('')}</select></div>
@@ -3472,7 +3477,7 @@ function populateTopicSelect(){
   refreshXSel(sel);
 }
 function wireTopicComparison(){
-  wireChartFilterBar('tc', {}, renderTopicComparison);
+  wireChartFilterBar('tc', {dateRange:true}, renderTopicComparison);
   window.__groupByRerender = window.__groupByRerender || {};
   window.__groupByRerender['tc'] = renderTopicComparison;
   document.getElementById('tc-level').addEventListener('change', ()=>{
@@ -3502,18 +3507,55 @@ function wireTopicComparison(){
   document.getElementById('tc-subtopic').addEventListener('change', renderTopicComparison);
   renderTopicComparison();
 }
-function scoresByTopicForEntities(entities, topic, subTopic){
-  const buckets = {'0':0,'1':0,'2':0}; let total=0;
-  entities.forEach(ent=>{
-    const side = ent.role==='ours' ? 'candidate' : 'opponent';
-    (ROWS_BY_RACE[ent.race] || []).forEach(r=>{
-      const tested = PROMPT_NARR_TESTED[r.prompt_id];
-      if(!tested || !tested.includes(topic)) return;
-      if(subTopic && subTopic!=='all' && r.sub_topic!==subTopic) return;
-      const v = r['narrative_alignment_score_'+side];
-      if(v==='0'||v==='1'||v==='2'){ buckets[v]++; total++; }
+function emptyTopicScoreBuckets(){ return {'0':0,'1':0,'2':0}; }
+function addTopicScoreBuckets(target, source){
+  target['0'] += source['0']; target['1'] += source['1']; target['2'] += source['2'];
+}
+function newTopicScoreCell(){ return {candidate:emptyTopicScoreBuckets(), opponent:emptyTopicScoreBuckets()}; }
+function ensureTopicComparisonIndex(){
+  if(TOPIC_COMPARISON_INDEX) return TOPIC_COMPARISON_INDEX;
+  const index = Object.create(null);
+  // A single pass over the raw rows is materially cheaper than the old per-group scans. Store
+  // both the all-sub-topic and exact-sub-topic cells so the detailed selector stays instant.
+  aggRowsCache.forEach(row=>{
+    const tested = PROMPT_NARR_TESTED[row.prompt_id];
+    const dateIdx = DATE_INDEX_BY_VALUE[row.report_date];
+    if(!tested || dateIdx===undefined) return;
+    const candidateScore = row.narrative_alignment_score_candidate;
+    const opponentScore = row.narrative_alignment_score_opponent;
+    if(!(['0','1','2'].includes(candidateScore) || ['0','1','2'].includes(opponentScore))) return;
+    const raceStore = index[row.race] || (index[row.race] = Object.create(null));
+    tested.forEach(topic=>{
+      const topicStore = raceStore[topic] || (raceStore[topic] = {all:[], subtopics:Object.create(null)});
+      const exactSubtopic = row.sub_topic || '__none__';
+      const stores = [topicStore.all, topicStore.subtopics[exactSubtopic] || (topicStore.subtopics[exactSubtopic] = [])];
+      stores.forEach(store=>{
+        const cell = store[dateIdx] || (store[dateIdx] = newTopicScoreCell());
+        if(['0','1','2'].includes(candidateScore)) cell.candidate[candidateScore]++;
+        if(['0','1','2'].includes(opponentScore)) cell.opponent[opponentScore]++;
+      });
     });
   });
+  TOPIC_COMPARISON_INDEX = index;
+  return index;
+}
+function scoresByTopicForEntities(entities, topic, subTopic, i0, i1){
+  const buckets = {'0':0,'1':0,'2':0}; let total=0;
+  const index = ensureTopicComparisonIndex();
+  entities.forEach(ent=>{
+    const side = ent.role==='ours' ? 'candidate' : 'opponent';
+    const topicStore = index[ent.race] && index[ent.race][topic];
+    if(!topicStore) return;
+    const exactSubtopic = subTopic && subTopic!=='all' ? subTopic : null;
+    const rowsByDate = exactSubtopic ? topicStore.subtopics[exactSubtopic] : topicStore.all;
+    if(!rowsByDate) return;
+    for(let day=i0; day<=i1; day++){
+      const cell = rowsByDate[day];
+      if(!cell) continue;
+      addTopicScoreBuckets(buckets, cell[side]);
+    }
+  });
+  total = buckets['0'] + buckets['1'] + buckets['2'];
   return {buckets, total};
 }
 function renderTopicComparison(){
@@ -3521,6 +3563,7 @@ function renderTopicComparison(){
   const topic = document.getElementById('tc-topic').value;
   if(!topic){ bodyEl.innerHTML = '<div class="small-muted" style="padding:10px;">Select a topic above to see the comparison.</div>'; return; }
   const subTopic = document.getElementById('tc-subtopic').value;
+  const [i0,i1] = dateRangeIdx('tc');
   const raceVal = document.getElementById('tc-race').value;
   let groups;
   if(raceVal!=='all'){
@@ -3540,7 +3583,7 @@ function renderTopicComparison(){
     // this render already, but its value was never read.
     groups = splitGroupsFor(idxs, {party, candidateType:ctype}, groupByFor('tc')).map(g=>({label:`${g.label} (${g.entities.length})`, entities:g.entities}));
   }
-  const scored = groups.map(g=>({label:g.label, d: scoresByTopicForEntities(g.entities, topic, subTopic)}));
+  const scored = groups.map(g=>({label:g.label, d: scoresByTopicForEntities(g.entities, topic, subTopic, i0, i1)}));
   if(!scored.some(r=>r.d.total>0)){
     bodyEl.innerHTML = '<div class="small-muted" style="padding:10px;">No scored responses for this topic in the current filter.</div>';
     return;
