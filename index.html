@@ -757,7 +757,7 @@ function heavyAssetUrl(relPath){ return (HEAVY_DATA_BASE_URL || 'dashboard_data/
 const SCORE_RELEASE_PREFIX = 'score-releases/refresh-sep28-oct11-20261014-v2/';
 // This derivative is immutable and records the exact source aggregate it summarizes. Keeping it
 // separate from the raw score release means adding a performance view never mutates scoring data.
-const SCORE_BOOTSTRAP_PREFIX = 'score-bootstrap-releases/refresh-sep28-oct11-20261014-v4/';
+const SCORE_BOOTSTRAP_PREFIX = 'score-bootstrap-releases/refresh-sep28-oct11-20261025-v6/';
 const CITATION_RELEASE_PREFIX = 'citation-releases/refresh-oct17-oct20-20261023-v1/';
 // The first Citation Breakout paint uses a tiny exact all-race roll-up. Race,
 // office, and state filtering fetch the larger no-topic cube only when used;
@@ -2976,7 +2976,10 @@ function buildOverviewPage(){
       <div class="card-title">Score by dimension</div>
       <div class="card-caption">Shows Democrats vs. Republicans by default. Narrows to candidate-vs-opponent if you pick a race or a candidate. The date range applies consistently to the chart, the headline metrics, and Composite.</div>
       ${chartFilterBarHtml('ov-cmp', {level:true, location:true, dateRange:true})}
-      <div class="subfilter-row" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">${groupByToggleHtml('ov-cmp')}</div>
+      <div class="subfilter-row" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;align-items:flex-end;">${groupByToggleHtml('ov-cmp')}
+        <div class="fitem"><label>Cross-workstream view</label><div style="display:flex;gap:4px;"><button type="button" class="btn sm" id="ov-snapshot-selected" onclick="setOverviewSnapshotMode('selected')">Selected date / range</button><button type="button" class="btn ghost sm" id="ov-snapshot-kickoff" onclick="setOverviewSnapshotMode('kickoff')">All-race kickoff</button></div></div>
+      </div>
+      <div id="ov-snapshot-note" class="small-muted" style="margin:-2px 0 12px;"></div>
       <div class="kpis" id="ov-kpis"></div>
       <div id="ov-chart"></div>
     </div>
@@ -2996,6 +2999,7 @@ function buildOverviewPage(){
   wireChartFilterBar('ov-cmp', {level:true, location:true, dateRange:true}, renderOverview);
   window.__groupByRerender = window.__groupByRerender || {};
   window.__groupByRerender['ov-cmp'] = renderOverview;
+  updateOverviewSnapshotControls();
   document.getElementById('ov-tbl-race').dataset.xselDone='1'; buildXSel(document.getElementById('ov-tbl-race'));
   wireCandidateSelect('ov-tbl', renderOverviewTable);
   document.getElementById('ov-tbl-race').addEventListener('change', renderOverviewTable);
@@ -3016,6 +3020,66 @@ function populateLocationSelect(selId, stateSelId, levelSelId){
 function ovFilters(){
   const [i0,i1] = dateRangeIdx('ov-cmp');
   return {party:document.getElementById('ov-cmp-party').value, candidateType:document.getElementById('ov-cmp-ctype').value, state:document.getElementById('ov-cmp-state').value, office:document.getElementById('ov-cmp-office').value, level:document.getElementById('ov-cmp-level').value, location:document.getElementById('ov-cmp-location').value, race:document.getElementById('ov-cmp-race').value, i0, i1};
+}
+// A global calendar date is not a valid kickoff for every monitored race: 74 races were first
+// assessed Aug. 31 and the later cohort began Sept. 25.  This mode selects each entity's own
+// first scored visibility observation, then uses that same day across every metric.  It gives the
+// Aggregate chart a true 107-race starting point without pretending that Aug. 31 measured WS3+.
+window.__overviewSnapshotMode = window.__overviewSnapshotMode || 'selected';
+const overviewKickoffBucketCache = new Map();
+function overviewSnapshotMode(){ return window.__overviewSnapshotMode || 'selected'; }
+function overviewKickoffDayIdx(entity){
+  const values = METRICS[entity.id]?.history?.visibility || [];
+  return values.findIndex(value=>value!==null && value!==undefined);
+}
+function overviewKickoffAvailableFromBootstrap(){
+  return ENTITIES.length>0 && ENTITIES.every(entity=>{
+    const dayIdx=overviewKickoffDayIdx(entity);
+    const daily=METRICS[entity.id]?.dailyBucketTotals;
+    return dayIdx>=0 && DIM_KEYS.every(dim=>Array.isArray(daily?.[dim]) && daily[dim].length>dayIdx);
+  });
+}
+function overviewKickoffBucketTotals(entity, dim){
+  const dayIdx = overviewKickoffDayIdx(entity);
+  if(dayIdx < 0) return {buckets:{}, total:0};
+  const cacheKey = `${entity.id}|${dim}|${dayIdx}`;
+  if(!overviewKickoffBucketCache.has(cacheKey)){
+    // The heavy source is loaded before kickoff mode renders. This uses the same exact bucket
+    // denominators as every other Aggregate comparison, rather than averaging percentages.
+    overviewKickoffBucketCache.set(cacheKey, entityBucketTotals(entity, dim, null, [dayIdx,dayIdx], 'all'));
+  }
+  return overviewKickoffBucketCache.get(cacheKey);
+}
+function overviewKickoffGroupShare(entities, dim){
+  return bestShare(dim, mergeBucketTotals(entities.map(entity=>overviewKickoffBucketTotals(entity, dim))));
+}
+function overviewKickoffComposite(entity){
+  const dayIdx = overviewKickoffDayIdx(entity);
+  return dayIdx < 0 ? null : compositeForRange(entity, [dayIdx,dayIdx], 'all');
+}
+function updateOverviewSnapshotControls(){
+  const kickoff = overviewSnapshotMode()==='kickoff';
+  const selected = document.getElementById('ov-snapshot-selected');
+  const kickoffButton = document.getElementById('ov-snapshot-kickoff');
+  if(selected) selected.className = 'btn sm' + (kickoff ? ' ghost' : '');
+  if(kickoffButton) kickoffButton.className = 'btn sm' + (kickoff ? '' : ' ghost');
+  // A start/end range would be misleading here: the kickoff mode intentionally blends each
+  // race's initial scored day. Preserve the user's dates and restore them when they switch back.
+  ['ov-cmp-start','ov-cmp-end'].forEach(id=>{
+    const input=document.getElementById(id);
+    if(input) input.disabled=kickoff;
+  });
+  const note=document.getElementById('ov-snapshot-note');
+  if(note){
+    note.textContent=kickoff
+      ? 'All-race kickoff uses each race’s first scored checkpoint (74 races on Aug. 31; 33 on Sept. 25). Date controls are disabled because this comparison intentionally blends those baseline dates.'
+      : 'Use a single date (for example, Oct. 11) or a date range to compare every workstream on the same scoring date(s).';
+  }
+}
+function setOverviewSnapshotMode(mode){
+  window.__overviewSnapshotMode = mode==='kickoff' ? 'kickoff' : 'selected';
+  updateOverviewSnapshotControls();
+  renderOverview();
 }
 function overviewRangeAvailableFromBootstrap(range){
   // Fail closed for old or partial bootstrap assets.  The Aggregate page can avoid the full score
@@ -3143,15 +3207,18 @@ function renderOverviewInsight(ours, range){
 async function renderOverview(){
   const f = ovFilters();
   const range = [f.i0,f.i1];
+  const kickoff = overviewSnapshotMode()==='kickoff';
+  updateOverviewSnapshotControls();
   const isFullHistory = f.i0===0 && f.i1===DATES.length-1;
   // The compact bootstrap now carries response-weighted daily bucket totals.  A narrowed
   // Aggregate range, including a single calendar day, can therefore render exactly without
   // downloading the 300 MB response-level corpus.  Retain the full-data fallback only for an
   // older bootstrap that predates that compact daily asset.
   const compactRangeReady = overviewRangeAvailableFromBootstrap(range);
-  if(!isFullHistory && !FULL_SCORE_DATA_READY && !compactRangeReady){
+  const kickoffCompactReady=!kickoff || overviewKickoffAvailableFromBootstrap();
+  if((!kickoffCompactReady || (!isFullHistory && !compactRangeReady)) && !FULL_SCORE_DATA_READY){
     const chart = document.getElementById('ov-chart');
-    if(chart) chart.innerHTML = '<div class="small-muted" style="padding:18px 0;">Loading the selected date range…</div>';
+    if(chart) chart.innerHTML = `<div class="small-muted" style="padding:18px 0;">Loading the ${kickoff?'all-race kickoff':'selected date range'}…</div>`;
     try { await ensureFullScoreData(); }
     catch(e){
       console.error('Detailed score data load failed for Aggregate range', e);
@@ -3161,8 +3228,13 @@ async function renderOverview(){
   }
   const idxs = resolveEntitiesForFilters(f);
   const ours = idxs.map(i=>ourEntity(i));
-  renderOverviewInsight(ours, range);
-  const compAvg = avg(ours.map(e=>compositeForRange(e, range)));
+  if(kickoff){
+    const insight=document.getElementById('ov-insight-body');
+    if(insight) insight.innerHTML='<div class="small-muted">This baseline view combines each race’s first scored checkpoint. Switch to <b>Selected date / range</b> for the current opportunity summary and its supporting drill-downs.</div>';
+  }else renderOverviewInsight(ours, range);
+  const groupScore=(entities,dim)=>kickoff ? overviewKickoffGroupShare(entities,dim) : groupShare(entities,dim,range,'all');
+  const compositeScore=entity=>kickoff ? overviewKickoffComposite(entity) : compositeForRange(entity, range);
+  const compAvg = avg(ours.map(compositeScore));
   // Bug-report fix (2026-09-08): these KPIs average over EVERY tracked candidate (Democrat +
   // Non-Partisan), but the comparison chart just below splits that same population into separate
   // Democrats/Republicans/Non-Partisan bars -- so whenever NP candidates are in view, this row's
@@ -3173,11 +3245,11 @@ async function renderOverview(){
   const npCount = ours.filter(e=>e.party==='NP').length;
   document.getElementById('ov-kpis').innerHTML = `
     <div class="kpi hi" title="Composite = Visibility × 40% + Favorability × 15% + Depth × 15% + Accuracy × 15% + Narrative Alignment × 15% (Consistency excluded)."><div class="kpi-label">Composite</div><div class="kpi-value">${fmt1(compAvg)}</div><div class="kpi-sub">${ours.length} candidates in view</div></div>
-    <div class="kpi"><div class="kpi-label">Visibility</div><div class="kpi-value">${fmt1(groupShare(ours,'visibility',range,'all'))}</div></div>
-    <div class="kpi"><div class="kpi-label">Favorability</div><div class="kpi-value">${fmt1(groupShare(ours,'favorability',range,'all'))}</div></div>
-    <div class="kpi"><div class="kpi-label">Depth</div><div class="kpi-value">${fmt1(groupShare(ours,'depth',range,'all'))}</div></div>
-    <div class="kpi"><div class="kpi-label">Accuracy</div><div class="kpi-value">${fmt1(groupShare(ours,'accuracy',range,'all'))}</div></div>
-    <div class="kpi"><div class="kpi-label">Narrative Alignment</div><div class="kpi-value">${fmt1(groupShare(ours,'narrative',range,'all'))}</div></div>`;
+    <div class="kpi"><div class="kpi-label">Visibility</div><div class="kpi-value">${fmt1(groupScore(ours,'visibility'))}</div></div>
+    <div class="kpi"><div class="kpi-label">Favorability</div><div class="kpi-value">${fmt1(groupScore(ours,'favorability'))}</div></div>
+    <div class="kpi"><div class="kpi-label">Depth</div><div class="kpi-value">${fmt1(groupScore(ours,'depth'))}</div></div>
+    <div class="kpi"><div class="kpi-label">Accuracy</div><div class="kpi-value">${fmt1(groupScore(ours,'accuracy'))}</div></div>
+    <div class="kpi"><div class="kpi-label">Narrative Alignment</div><div class="kpi-value">${fmt1(groupScore(ours,'narrative'))}</div></div>`;
   document.getElementById('ov-kpis-note') && document.getElementById('ov-kpis-note').remove();
   if(npCount>0){
     document.getElementById('ov-kpis').insertAdjacentHTML('afterend', `<div id="ov-kpis-note" class="small-muted" style="margin:-8px 0 12px;">These KPIs average all ${ours.length} tracked candidates in view, including ${npCount} Non-Partisan — the chart below splits the same candidates by party, so its Democrats bar (and Republicans/Non-Partisan bars) won't exactly match this row.</div>`);
@@ -3192,8 +3264,8 @@ async function renderOverview(){
   let series;
   if(idxs.length===1){
     const o=ourEntity(idxs[0]), p=oppEntity(idxs[0]);
-    series=[{name:o.name,color:'#2E5EAA',values:dims.map(d=>norm(bestShare(d,entityBucketTotals(o,d,null,range,'all')),d))}];
-    if(p) series.push({name:p.name,color:'#B23B3B',values:dims.map(d=>norm(bestShare(d,entityBucketTotals(p,d,null,range,'all')),d))});
+    series=[{name:o.name,color:'#2E5EAA',values:dims.map(d=>norm(kickoff?bestShare(d,overviewKickoffBucketTotals(o,d)):bestShare(d,entityBucketTotals(o,d,null,range,'all')),d))}];
+    if(p) series.push({name:p.name,color:'#B23B3B',values:dims.map(d=>norm(kickoff?bestShare(d,overviewKickoffBucketTotals(p,d)):bestShare(d,entityBucketTotals(p,d,null,range,'all')),d))});
   } else {
     // Bug fix (2026-09-08): this used to reuse `idxs` (from resolveEntitiesForFilters(f), which
     // pre-filters the race POOL by f.party/f.candidateType against "our" (Democrat) entity's own
@@ -3213,7 +3285,7 @@ async function renderOverview(){
     if(f.location!=='all') chartIdxs = chartIdxs.filter(i=>ROSTER[i].location===f.location);
     const groupBy = groupByFor('ov-cmp');
     const groups = splitGroupsFor(chartIdxs, f, groupBy);
-    series = groups.map(g=>({name:g.label, color:groupColor(groupBy,g.key), values:dims.map(d=>norm(groupShare(g.entities,d,range,'all'),d))}));
+    series = groups.map(g=>({name:g.label, color:groupColor(groupBy,g.key), values:dims.map(d=>norm(groupScore(g.entities,d),d))}));
   }
   barChart('ov-chart', dimLabels, series, {height:230});
 }

@@ -32,6 +32,8 @@ ALLOWED_INVALID_BUCKETS = {
 DIMS = ("depth", "accuracy", "narrative", "consistency")
 METRIC_NAMES = ("visibility", "favorability", "depth", "accuracy", "narrative", "consistency")
 VALID_CITATION_TYPES = {"sources_cited", "sources_search", "sources_more", "sources_references"}
+SNAPSHOT_DIMS = ("visibility", "favorability", "depth", "accuracy", "narrative")
+SNAPSHOT_WEIGHTS = {"visibility": 0.40, "favorability": 0.15, "depth": 0.15, "accuracy": 0.15, "narrative": 0.15}
 
 
 def raw_score_dimension(dim):
@@ -160,6 +162,22 @@ def audit_scores(audit, full, full_hash, bootstrap):
         and isinstance(bootstrap.get("metrics_including_refusals"), dict),
         f"schema={bootstrap.get('schema_version')} category={bootstrap.get('artifact_category')}",
     )
+    metric_sets = (bootstrap.get("metrics", {}), bootstrap.get("metrics_including_refusals", {}))
+    daily_contract_ok = all(
+        isinstance(metric.get("dailyBucketTotals"), dict)
+        and all(
+            isinstance(metric["dailyBucketTotals"].get(dimension), list)
+            and len(metric["dailyBucketTotals"][dimension]) == len(bootstrap.get("dates", []))
+            for dimension in DIMS
+        )
+        for metric_set in metric_sets
+        for metric in metric_set.values()
+    )
+    audit.check(
+        "score bootstrap retains daily denominators for date and kickoff views",
+        daily_contract_ok,
+        f"metric_sets={len(metric_sets)} dates={len(bootstrap.get('dates', []))}",
+    )
     needed = [
         "race", "prompt_id", "ai_provider", "report_date", "is_blind", "is_refusal", "target_candidate",
         "candidate_name", "opponent_name", "prompt_level_visibility_score_candidate",
@@ -256,12 +274,94 @@ def audit_citations(audit, citation, manifest, roster_races, score_dates, expect
         audit.check("citation manifest entries are usable", not invalid_entries, f"invalid={len(invalid_entries)}")
 
 
+def snapshot_share(entries, dimension):
+    buckets, total = defaultdict(float), 0.0
+    for metric, day_indexes in entries:
+        for day_index in day_indexes:
+            cell = metric["dailyBucketTotals"][dimension][day_index]
+            total += cell["total"]
+            for key, value in cell["buckets"].items():
+                buckets[key] += value
+    if not total:
+        return None
+    if dimension == "favorability":
+        return 50 + 50 * (buckets["pos"] - buckets["neg"]) / total
+    return 100 * buckets["1" if dimension == "visibility" else "2"] / total
+
+
+def snapshot_summary(entries):
+    values = {dimension: snapshot_share(entries, dimension) for dimension in SNAPSHOT_DIMS}
+    known = [(values[dimension], SNAPSHOT_WEIGHTS[dimension]) for dimension in SNAPSHOT_DIMS if values[dimension] is not None]
+    values["composite"] = sum(value * weight for value, weight in known) / sum(weight for _, weight in known) if known else None
+    return values
+
+
+def format_snapshot(values):
+    return ", ".join(f"{key}={values[key]:.1f}" for key in (*SNAPSHOT_DIMS, "composite") if values[key] is not None)
+
+
+def audit_cross_workstream_snapshot_views(audit, bootstrap):
+    """Validate the Aggregate chart's three reference snapshots from its compact input.
+
+    The page's kickoff mode intentionally combines the first observed checkpoint per race; it is
+    not a global Aug. 31 filter. These checks keep that distinction durable in every refresh.
+    """
+    dates, roster, metrics = bootstrap.get("dates", []), bootstrap.get("roster", []), bootstrap.get("metrics", {})
+    date_index = {date: index for index, date in enumerate(dates)}
+    if not dates or not roster:
+        audit.check("cross-workstream snapshot inputs are available", False, "missing dates or roster")
+        return
+
+    entities = []
+    for index, row in enumerate(roster):
+        if canonical_race(row.get("race", "")) in EXCLUDED_RACES:
+            continue
+        for side, party_field, key_prefix in (("candidate", "candidate_party_affiliation", "c"), ("opponent", "opponent_party_affiliation", "o")):
+            metric = metrics.get(f"{key_prefix}{index}")
+            if metric:
+                entities.append((side, row.get(party_field), metric))
+    candidate_metrics = [metric for side, _party, metric in entities if side == "candidate"]
+    kickoff_days = []
+    for metric in candidate_metrics:
+        history = metric.get("history", {}).get("visibility", [])
+        first = next((index for index, value in enumerate(history) if value is not None), None)
+        if first is not None:
+            kickoff_days.append(first)
+    audit.check("cross-workstream kickoff covers 107 tracked races", len(kickoff_days) == 107, f"races={len(kickoff_days)}")
+    audit.check(
+        "cross-workstream kickoff uses only observed first checkpoints",
+        bool(kickoff_days) and all(index < len(dates) for index in kickoff_days),
+        "dates=" + ", ".join(sorted({dates[index] for index in kickoff_days})),
+    )
+
+    cohorts = {
+        "kickoff": lambda metric: [next(index for index, value in enumerate(metric["history"]["visibility"]) if value is not None)],
+        "2026-10-11": lambda metric: [date_index["2026-10-11"]],
+        "2026-10-05 through 2026-10-11": lambda metric: list(range(date_index["2026-10-05"], date_index["2026-10-11"] + 1)),
+    }
+    required_dates = {"2026-10-05", "2026-10-11"}
+    audit.check("reference date snapshots are present", required_dates <= set(date_index), f"missing={sorted(required_dates - set(date_index))}")
+    for label, select_days in cohorts.items():
+        if label != "kickoff" and not required_dates <= set(date_index):
+            continue
+        summaries = {}
+        for party, expected in (("Democrats", "Democrat"), ("Republicans", "Republican")):
+            entries = [(metric, select_days(metric)) for _side, entity_party, metric in entities if entity_party == expected]
+            summaries[party] = snapshot_summary(entries)
+        audit.check(
+            f"Aggregate {label} snapshot has all five party dimensions",
+            all(summary[dimension] is not None for summary in summaries.values() for dimension in SNAPSHOT_DIMS),
+            "; ".join(f"{party}: {format_snapshot(summary)}" for party, summary in summaries.items()),
+        )
+
+
 def audit_dashboard_contract(audit, dashboard):
     if not dashboard:
         return
     text = Path(dashboard).read_text(encoding="utf-8")
     checks = {
         "score bootstrap contract supports published release labels": "score_bootstrap_compact_metrics" in text and "supportedBootstrapCategories" in text,
+        "Aggregate supports an explicit cross-workstream kickoff": "setOverviewSnapshotMode" in text and "All-race kickoff" in text and "overviewKickoffDayIdx" in text,
         "107-race exclusion is implemented": "EXCLUDED_SCORE_RACES" in text and "LA Mayor" in text,
         "race aliases are canonicalized": "canonicalScoreRace" in text and "New Hanover-Pender" in text,
         "invalid buckets are rejected": "isValidBucketScore" in text,
@@ -291,6 +391,7 @@ def main():
         citation, _ = load_json(args.citation_summary)
         manifest = load_json(args.citation_manifest)[0] if args.citation_manifest else None
         races, dates = audit_scores(audit, score, score_hash, bootstrap)
+        audit_cross_workstream_snapshot_views(audit, bootstrap)
         audit_citations(audit, citation, manifest, races, dates, args.expected_through)
         audit_dashboard_contract(audit, args.dashboard)
     except Exception as exc:
