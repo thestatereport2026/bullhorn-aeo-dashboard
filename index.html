@@ -1598,7 +1598,7 @@ function visibilityEligible(row, side){
    smooth-curve-based version. Visibility/Favorability are prompt-level percentages (averaged
    across that day's prompts); Depth/Accuracy/Narrative/Consistency are literal per-response 0/1/2
    counts for that day. */
-function dailyBucketShare(entityId, dim, dayIdx, modelFilter){
+function dailyBucketShare(entityId, dim, dayIdx, modelFilter, blindOverride){
   const zero = dim==='visibility' ? {'0':0,'1':0} : dim==='favorability' ? {pos:0,neu:0,neg:0} : {'0':0,'1':0,'2':0};
   const ent = entityById(entityId);
   const d = DATES[dayIdx];
@@ -1606,13 +1606,17 @@ function dailyBucketShare(entityId, dim, dayIdx, modelFilter){
   // Precomputed in buildMetrics() for the common (no per-model split) case -- see history3's own
   // comment there. Only the per-model split (Consistency's by-provider trend) still needs a fresh
   // scan below, since that's one axis finer than what's cached.
-  if(!modelFilter){
+  // The compact day cache has no prompt-type split. It is exact only for the
+  // all-prompts view; Blind/Named selections deliberately use the detailed
+  // rows after ensureFullScoreData() has completed.
+  if(!modelFilter && (!blindOverride || blindOverride==='all')){
     const cached = METRICS[entityId] && METRICS[entityId].history3[dim] && METRICS[entityId].history3[dim][dayIdx];
     if(cached) return cached;
   }
   const side = ent.role==='ours' ? 'candidate' : 'opponent';
   let dayRows = (ROWS_BY_RACE[ent.race] || []).filter(r=>r.report_date===d);
   if(modelFilter) dayRows = dayRows.filter(r=>r.ai_provider===MODEL_TO_PROVIDER[modelFilter]);
+  if(blindOverride && blindOverride!=='all') dayRows = dayRows.filter(r=>r.is_blind===blindOverride);
   if(dim==='favorability'){
     // Dedup by prompt_id (2026-09-08 tie-out fix) -- see buildMetrics()'s matching comment.
     const perPrompt = {};
@@ -3089,7 +3093,7 @@ function renderOverviewInsight(ours, range){
       const worstDim = dimShares[0];
       const worstLabel = bucket3Label(worstDim.dim, worstDim.dim==='favorability'?'neg':'0').toLowerCase();
       bullets.push(`${DIM_LABELS[worstDim.dim]} is the biggest opportunity across the ${ours.length} candidate${ours.length===1?'':'s'} in view — ${fmt1(worstDim.share)}% of scored responses are ${worstLabel}.`);
-      const catAcc = categoryScoresAcrossEntities(ours, worstDim.dim);
+      const catAcc = categoryScoresAcrossEntities(ours, worstDim.dim, null, range, 'all');
       const catRows = Object.entries(catAcc).map(([cat,c])=>({cat,share:worstShare(worstDim.dim,c)})).filter(x=>x.share!==null).sort((a,b)=>b.share-a.share);
       if(catRows.length) bullets.push(`Within ${DIM_LABELS[worstDim.dim]}, ${categoryPlain(catRows[0].cat)} are the biggest driver (${fmt1(catRows[0].share)}% ${worstLabel}) — see the ${DIM_LABELS[worstDim.dim]} page for the specific responses and recommended fixes.`);
       if(dimShares.length>1){
@@ -3747,18 +3751,18 @@ function entityBucketTotals(ent, key, modelFilter, rangeOverride, blindOverride)
   const data = scoresByCategoryForEntity(ent, key, null, modelFilter, rangeOverride, blindOverride);
   return mergeBucketTotals(Object.values(data.byCategory));
 }
-function bucketScoresAcrossEntities(entities, key){
+function bucketScoresAcrossEntities(entities, key, modelFilter, rangeOverride, blindOverride){
   const acc = {}; Object.keys(BUCKET_LABELS).forEach(b=>{ acc[b] = {buckets:{},total:0}; });
   entities.forEach(e=>{
-    const d = scoresByCategoryForEntity(e, key);
+    const d = scoresByCategoryForEntity(e, key, null, modelFilter, rangeOverride, blindOverride);
     Object.keys(acc).forEach(b=>{ acc[b] = mergeBucketTotals([acc[b], d.byBucket[b]]); });
   });
   return acc;
 }
-function categoryScoresAcrossEntities(entities, key){
+function categoryScoresAcrossEntities(entities, key, modelFilter, rangeOverride, blindOverride){
   const acc = {};
   entities.forEach(e=>{
-    const d = scoresByCategoryForEntity(e, key);
+    const d = scoresByCategoryForEntity(e, key, null, modelFilter, rangeOverride, blindOverride);
     Object.entries(d.byCategory).forEach(([cat,c])=>{ acc[cat] = mergeBucketTotals([acc[cat], c]); });
   });
   return acc;
@@ -3979,11 +3983,12 @@ function bucketAndCategoryInsights(key){
   else { const idxs = computeInsightEntities(key); entities = idxs.map(i=>ourEntity(i)); }
   if(!entities.length) return bullets;
   const worstLabel = bucket3Label(key, key==='favorability'?'neg':'0').toLowerCase();
-  const overall = mergeBucketTotals(entities.map(e=>entityBucketTotals(e,key)));
+  const [i0,i1] = dateRangeIdx(key+'-cmp');
+  const overall = mergeBucketTotals(entities.map(e=>entityBucketTotals(e,key,null,[i0,i1],f.blind)));
   const overallWorst = worstShare(key, overall);
   if(overallWorst!==null) bullets.push(`${fmt1(overallWorst)}% of scored responses for ${entities.length===1?entities[0].name:entities.length+' candidates in view'} are ${worstLabel}.`);
   const seeMoreText = key==='consistency' ? 'see the "Most inconsistent prompts" list below for specifics.' : 'see the breakdown below for specific categories and fixes.';
-  const catAcc = categoryScoresAcrossEntities(entities, key);
+  const catAcc = categoryScoresAcrossEntities(entities, key, null, [i0,i1], f.blind);
   const catRows = Object.entries(catAcc).map(([cat,c])=>({cat,share:worstShare(key,c)})).filter(x=>x.share!==null).sort((a,b)=>b.share-a.share);
   if(catRows.length){
     const worst = catRows[0], best = catRows[catRows.length-1];
@@ -3998,10 +4003,11 @@ function computeAccuracyIssueRows(){
   if(f.office!=='all') idxs = idxs.filter(i=>ROSTER[i].office===f.office);
   if(f.level!=='all') idxs = idxs.filter(i=>ROSTER[i].race_level===f.level);
   if(f.race!=='all') idxs = idxs.filter(i=>i===parseInt(f.race,10));
-  const [i0,i1] = dateRangeIdx('accuracy-trend');
+  const [i0,i1] = dateRangeIdx('accuracy-cmp');
   let rows=[];
   idxs.forEach(idx=>{
     (PROMPTS_BY_RACE[idx]||[]).forEach(p=>{
+      if(f.blind && f.blind!=='all' && p.is_blind!==f.blind) return;
       MODELS.forEach(m=>{
         // Every real run in range, not just the latest (2026-08-31 fix — see getRunsInRange).
         getRunsInRange(p,m,i0,i1).forEach(run=>{
@@ -4041,14 +4047,18 @@ function buildAccuracyInsights(){
 function buildConsistencyInsights(key){
   const bullets = bucketAndCategoryInsights(key);
   const f = dimFilters(key+'-cmp');
-  const [i0,i1]=dateRangeIdx(key+'-trend');
+  const [i0,i1]=dateRangeIdx(key+'-cmp');
   let entities;
   if(f.race!=='all'){ entities=[ourEntity(parseInt(f.race,10))]; }
   else { const idxs=computeInsightEntities(key); entities = idxs.map(i=>ourEntity(i)); }
   entities = entities.filter(Boolean);
   if(!entities.length) return bullets;
   let worst=null;
-  entities.forEach(e=>{ const vol = stddev(METRICS[e.id].history.consistency.slice(i0,i1+1)); if(!worst||vol>worst.vol) worst={e,vol}; });
+  entities.forEach(e=>{
+    const values=DATES.slice(i0,i1+1).map((day,offset)=>bestShare(key,entityBucketTotals(e,key,null,[i0+offset,i0+offset],f.blind))).filter(v=>v!=null);
+    const vol = stddev(values);
+    if(!worst||vol>worst.vol) worst={e,vol};
+  });
   if(worst) bullets.push(`${worst.e.name} shows the most day-to-day volatility in this dimension (σ ≈ ${fmt1(worst.vol)}) — worth a closer look at what's driving unstable answers.`);
   return bullets;
 }
@@ -4059,7 +4069,8 @@ function buildNarrativeInsights(key){
   else { const idxs=computeInsightEntities(key); entities = idxs.map(i=>ourEntity(i)); }
   if(!entities.length) return [];
   const bullets=[];
-  const avgScore = groupShare(entities, 'narrative');
+  const [i0,i1] = dateRangeIdx(key+'-cmp');
+  const avgScore = groupShare(entities, 'narrative', [i0,i1], 'all');
   bullets.push(`Average narrative alignment across candidates in view is ${fmt1(avgScore)} out of 100.`);
   let bestGapTopic=null;
   entities.forEach(e=>{ (METRICS[e.id].gaps||[]).forEach(g=>{ if(!bestGapTopic||g.pctMissing>bestGapTopic.pctMissing) bestGapTopic={topic:g.topic,pctMissing:g.pctMissing,name:e.name}; }); });
@@ -4075,7 +4086,10 @@ const INSIGHT_BUILDERS = {
   narrative: buildNarrativeInsights
 };
 
-function dimFilters(key){ return {state:document.getElementById(key+'-state').value, race:document.getElementById(key+'-race').value, office:document.getElementById(key+'-office').value, level:document.getElementById(key+'-level').value, party:document.getElementById(key+'-party').value, candidateType:document.getElementById(key+'-ctype').value}; }
+function dimFilters(key){
+  const value=suffix=>document.getElementById(key+'-'+suffix)?.value || 'all';
+  return {state:value('state'), race:value('race'), office:value('office'), level:value('level'), party:value('party'), candidateType:value('ctype'), blind:value('blind')};
+}
 function nearestDateIdx(dateStr, roundUp){
   // DATES is sparse (real report dates only) — a date picker lets the user choose any
   // calendar date, so an exact-match lookup would silently snap back to the full range
@@ -4093,7 +4107,21 @@ function nearestDateIdx(dateStr, roundUp){
 }
 function dateRangeIdx(key){ const startEl=document.getElementById(key+'-start'), endEl=document.getElementById(key+'-end'); if(!startEl||!endEl) return [0,DATES.length-1]; const s=startEl.value, en=endEl.value; let i0=s?nearestDateIdx(s,false):0, i1=en?nearestDateIdx(en,true):DATES.length-1; return [Math.min(i0,i1),Math.max(i0,i1)]; }
 
-function renderDimensionPage(key){
+async function ensureDimensionPromptTypeData(key){
+  if(!IS_BUCKET3[key] || FULL_SCORE_DATA_READY) return true;
+  const needsDetailed=['cmp','trend','tbl'].some(section=>document.getElementById(key+'-'+section+'-blind')?.value && document.getElementById(key+'-'+section+'-blind').value!=='all');
+  if(!needsDetailed) return true;
+  const targets=['cmp','trend','table'].map(section=>document.getElementById(key+'-'+section)).filter(Boolean);
+  targets.forEach(target=>target.innerHTML='<div class="small-muted" style="padding:18px 0;">Loading detailed score data to apply the prompt-type filter…</div>');
+  try{ await ensureFullScoreData(); return true; }
+  catch(error){
+    const message='<div class="err-banner">Prompt-type detail could not load: '+escXHtml(String(error.message||error))+'</div>';
+    targets.forEach(target=>target.innerHTML=message);
+    return false;
+  }
+}
+async function renderDimensionPage(key){
+  if(!await ensureDimensionPromptTypeData(key)) return;
   const range = DIM_RANGE[key];
   if(IS_BUCKET3[key]){
     renderBucket3Charts(key, dimFilters(key+'-cmp'), dimFilters(key+'-trend'));
@@ -4185,14 +4213,15 @@ function renderBucket3Charts(key, fCmp, fTrend){
   const topicOpt = (catOpt && topicSelEl && topicSelEl.value!=='all') ? topicSelEl.value : null;
   // Visibility is binary — show only the "mentioned" share, not a mentioned/not-mentioned pair.
   const order = (key==='visibility') ? ['1'] : bucket3Order(key);
+  const [cmpI0,cmpI1] = dateRangeIdx(key+'-cmp');
   function bucketsFor(ent){
     if(!ent) return {buckets:{},total:0};
-    if(catOpt){ const d = scoresByCategoryForEntity(ent,key,topicOpt); return d.byCategory[catOpt] || {buckets:{},total:0}; }
-    return entityBucketTotals(ent, key);
+    if(catOpt){ const d = scoresByCategoryForEntity(ent,key,topicOpt,null,[cmpI0,cmpI1],fCmp.blind); return d.byCategory[catOpt] || {buckets:{},total:0}; }
+    return entityBucketTotals(ent, key, null, [cmpI0,cmpI1], fCmp.blind);
   }
   function groupBuckets(entities){
-    if(catOpt) return mergeBucketTotals(entities.map(e=>scoresByCategoryForEntity(e,key,topicOpt).byCategory[catOpt]));
-    return mergeBucketTotals(entities.map(e=>entityBucketTotals(e,key)));
+    if(catOpt) return mergeBucketTotals(entities.map(e=>(scoresByCategoryForEntity(e,key,topicOpt,null,[cmpI0,cmpI1],fCmp.blind).byCategory[catOpt] || {buckets:{},total:0})));
+    return mergeBucketTotals(entities.map(e=>entityBucketTotals(e,key,null,[cmpI0,cmpI1],fCmp.blind)));
   }
   // Visibility only ever renders one segment ("mentioned") — since there's no second bucket's
   // color to contrast against, color that segment by party instead of a generic outcome color.
@@ -4208,7 +4237,7 @@ function renderBucket3Charts(key, fCmp, fTrend){
   // pooling the comparison chart already does; if this becomes a perf problem once DATES.length
   // grows well past today's single real date, cache it the way history3 caches dailyBucketShare.
   function groupDailyShare(entities, dayIdx, b){
-    const t = mergeBucketTotals(entities.map(e=>entityBucketTotals(e, key, null, [dayIdx,dayIdx], 'all')));
+    const t = mergeBucketTotals(entities.map(e=>entityBucketTotals(e, key, null, [dayIdx,dayIdx], fTrend.blind)));
     return t.total ? 100*(t.buckets[b]||0)/t.total : null;
   }
   const trendCompareEl = document.getElementById(key+'-trend-compare');
@@ -4241,10 +4270,12 @@ function renderBucket3Charts(key, fCmp, fTrend){
       if(fCmp.party!=='all') entities = entities.filter(e=>e.party===fCmp.party);
       if(fCmp.candidateType!=='all') entities = entities.filter(e=>e.candidateType===fCmp.candidateType);
     }
-    const rows = MODELS.map(m=>({label:m, segments: catOpt
-      ? segmentsFor(mergeBucketTotals(entities.map(e=>scoresByCategoryForEntity(e,key,topicOpt,m).byCategory[catOpt])))
-      : segmentsFor(mergeBucketTotals(entities.map(e=>entityBucketTotals(e,key,m))))
-    }));
+    const rows = MODELS.map(m=>{
+      const totals = catOpt
+        ? mergeBucketTotals(entities.map(e=>scoresByCategoryForEntity(e,key,topicOpt,m,[cmpI0,cmpI1],fCmp.blind).byCategory[catOpt] || {buckets:{},total:0}))
+        : mergeBucketTotals(entities.map(e=>entityBucketTotals(e,key,m,[cmpI0,cmpI1],fCmp.blind)));
+      return {label:m, segments:segmentsFor(totals)};
+    });
     verticalStackedBarChart(key+'-cmp', rows, {height:260});
   } else if(fCmp.race!=='all'){
     const idx = parseInt(fCmp.race,10); const o=ourEntity(idx), p=oppEntity(idx);
@@ -4285,14 +4316,14 @@ function renderBucket3Charts(key, fCmp, fTrend){
     // One line per model, tracking % fully consistent (bucket '2') — plotting all 3 buckets ×
     // 3 models at once (9 lines) would be unreadable; this directly answers "which model is
     // getting less consistent over time."
-    const lseries = MODELS.map(m=>({name:m, color:MODEL_COLORS[m], values:labels.map((d,ix)=>avg(entities.map(e=>dailyBucketShare(e.id,key,i0+ix,m)['2'])))}));
+    const lseries = MODELS.map(m=>({name:m, color:MODEL_COLORS[m], values:labels.map((d,ix)=>avg(entities.map(e=>dailyBucketShare(e.id,key,i0+ix,m,fTrend.blind)['2'])))}));
     lineChart(key+'-trend', labels, lseries, {min:0,max:100,height:220});
   } else if(key==='visibility' && fTrend.race!=='all'){
     // Single-segment dim (just "% mentioned") — no competing outcome-bucket color to preserve, so
     // color by the candidate's/opponent's actual party like the comparison chart does.
     const idx = parseInt(fTrend.race,10); const o=ourEntity(idx), p=oppEntity(idx);
-    const lseries = [{name:o.name, color:partyColor(o.party), values:labels.map((d,ix)=>dailyBucketShare(o.id,key,i0+ix)['1'])}];
-    if(p) lseries.push({name:p.name, color:partyColor(p.party), values:labels.map((d,ix)=>dailyBucketShare(p.id,key,i0+ix)['1'])});
+    const lseries = [{name:o.name, color:partyColor(o.party), values:labels.map((d,ix)=>dailyBucketShare(o.id,key,i0+ix,null,fTrend.blind)['1'])}];
+    if(p) lseries.push({name:p.name, color:partyColor(p.party), values:labels.map((d,ix)=>dailyBucketShare(p.id,key,i0+ix,null,fTrend.blind)['1'])});
     lineChart(key+'-trend', labels, lseries, {min:0,max:100,height:220});
   } else if(key==='visibility'){
     // Default view: show every party line that survives the Party/Candidate Type filter (2026-08-31
@@ -4310,8 +4341,8 @@ function renderBucket3Charts(key, fCmp, fTrend){
     const idx = parseInt(fTrend.race,10); const o=ourEntity(idx), p=oppEntity(idx);
     if(trendCompareLabelEl) trendCompareLabelEl.textContent = 'Compare with opponent';
     if(trendCompareEl) trendCompareEl.disabled = !p;
-    const lseries = order.map(b=>({name:o.name+(order.length>1?' — '+bucket3Label(key,b):''), color:bucket3Color(key,b), values:labels.map((d,ix)=>dailyBucketShare(o.id,key,i0+ix)[b])}));
-    if(p && trendCompare) order.forEach(b=>lseries.push({name:p.name+(order.length>1?' — '+bucket3Label(key,b):''), color:bucket3Color(key,b), dash:'4,3', values:labels.map((d,ix)=>dailyBucketShare(p.id,key,i0+ix)[b])}));
+    const lseries = order.map(b=>({name:o.name+(order.length>1?' — '+bucket3Label(key,b):''), color:bucket3Color(key,b), values:labels.map((d,ix)=>dailyBucketShare(o.id,key,i0+ix,null,fTrend.blind)[b])}));
+    if(p && trendCompare) order.forEach(b=>lseries.push({name:p.name+(order.length>1?' — '+bucket3Label(key,b):''), color:bucket3Color(key,b), dash:'4,3', values:labels.map((d,ix)=>dailyBucketShare(p.id,key,i0+ix,null,fTrend.blind)[b])}));
     lineChart(key+'-trend', labels, lseries, {min:0,max:100,height:220});
   } else {
     let idxs = ROSTER.map((r,i)=>i);
@@ -4332,7 +4363,8 @@ function renderBucket3Charts(key, fCmp, fTrend){
     lineChart(key+'-trend', labels, lseries, {min:0,max:100,height:220});
   }
 }
-function renderDimTable(key){
+async function renderDimTable(key){
+  if(!await ensureDimensionPromptTypeData(key)) return;
   const blindEl = document.getElementById(key+'-tbl-blind');
   const [i0,i1] = dateRangeIdx(key+'-tbl');
   const filters = {state:document.getElementById(key+'-tbl-state').value, office:document.getElementById(key+'-tbl-office').value, level:document.getElementById(key+'-tbl-level').value, race:document.getElementById(key+'-tbl-race').value, blind: blindEl?blindEl.value:'all', i0, i1};
@@ -4500,7 +4532,7 @@ function buildAccuracyPage(){
   }
   const priorityHtml = `<div class="card section-gap" id="acc-priority-card">
       <div class="card-title">Accuracy issues — prioritized by candidate</div>
-      <div class="card-caption">Ranked by flagged-statement volume, respecting the filters above. Click a candidate, then a category, to see the full statement history in detail.</div>
+      <div class="card-caption">Ranked by flagged-statement volume, using the Comparison filters above. Click a candidate, then a category, to see the full statement history in detail.</div>
       <div id="acc-priority-crumb" class="small-muted" style="margin-bottom:8px;"></div>
       <div id="acc-priority-body"></div>
     </div>`;
@@ -4509,7 +4541,7 @@ function buildAccuracyPage(){
   window.__accGroupBy = 'inaccuracy';
   window.__srcIssue_accuracy = 'all';
   renderAccuracyPriority();
-  ['accuracy-cmp-party','accuracy-trend-party'].forEach(id=>{
+  ['accuracy-cmp-party'].forEach(id=>{
     const bar = document.getElementById(id)?.closest('.filterbar');
     if(!bar) return;
     bar.querySelectorAll('select,input').forEach(elm=>elm.addEventListener('change', ()=>{
