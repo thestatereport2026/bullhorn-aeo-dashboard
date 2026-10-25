@@ -1374,7 +1374,11 @@ async function loadScoreBootstrap(){
   const response = await fetch(scoreBootstrapUrl('score_bootstrap.json'));
   if(!response.ok) throw new Error('score bootstrap unavailable ('+response.status+')');
   const raw = await response.json();
-  if(!raw || raw.schema_version!==1 || raw.artifact_category!=='dashboard_score_bootstrap' ||
+  // The compact bootstrap was first published as `score_bootstrap_compact_metrics`.
+  // Accept that immutable release label as well as the newer dashboard-specific label;
+  // both use the same versioned browser contract below.
+  const supportedBootstrapCategories = new Set(['dashboard_score_bootstrap','score_bootstrap_compact_metrics']);
+  if(!raw || raw.schema_version!==1 || !supportedBootstrapCategories.has(raw.artifact_category) ||
      !Array.isArray(raw.roster) || !Array.isArray(raw.dates) || !raw.metrics || typeof raw.metrics!=='object' ||
      !raw.metrics_including_refusals || typeof raw.metrics_including_refusals!=='object'){
     throw new Error('score bootstrap has an invalid schema');

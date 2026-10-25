@@ -150,6 +150,16 @@ def equal(left, right):
 
 
 def audit_scores(audit, full, full_hash, bootstrap):
+    audit.check(
+        "score bootstrap has a supported browser contract",
+        bootstrap.get("schema_version") == 1
+        and bootstrap.get("artifact_category") in {"dashboard_score_bootstrap", "score_bootstrap_compact_metrics"}
+        and isinstance(bootstrap.get("roster"), list)
+        and isinstance(bootstrap.get("dates"), list)
+        and isinstance(bootstrap.get("metrics"), dict)
+        and isinstance(bootstrap.get("metrics_including_refusals"), dict),
+        f"schema={bootstrap.get('schema_version')} category={bootstrap.get('artifact_category')}",
+    )
     needed = [
         "race", "prompt_id", "ai_provider", "report_date", "is_blind", "is_refusal", "target_candidate",
         "candidate_name", "opponent_name", "prompt_level_visibility_score_candidate",
@@ -251,6 +261,7 @@ def audit_dashboard_contract(audit, dashboard):
         return
     text = Path(dashboard).read_text(encoding="utf-8")
     checks = {
+        "score bootstrap contract supports published release labels": "score_bootstrap_compact_metrics" in text and "supportedBootstrapCategories" in text,
         "107-race exclusion is implemented": "EXCLUDED_SCORE_RACES" in text and "LA Mayor" in text,
         "race aliases are canonicalized": "canonicalScoreRace" in text and "New Hanover-Pender" in text,
         "invalid buckets are rejected": "isValidBucketScore" in text,
