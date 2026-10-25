@@ -710,6 +710,20 @@ function collapseFilterbar(bar){
    INIT (section 11) builds any page — see the async wrapper at the bottom of this file.
    ============================================================================ */
 let AGG=null, TEXT=null, CITATIONS_RAW=null, CITATION_COVERAGE=null, ROSTER_RAW=null, ACCURACY_ISSUES_RAW=null, NARRATIVE_GAPS_RAW=null, SITE_ANALYTICS=null, SITE_ANALYTICS_RESPONSES=null, OWNED_DOMAINS=null;
+// The public research universe is the 107-race slate. The source export also carries an
+// LA mayoral pilot, which is intentionally out of scope for dashboard roll-ups.
+const EXCLUDED_SCORE_RACES = new Set(['LA Mayor']);
+function isTrackedScoreRace(race){ return !EXCLUDED_SCORE_RACES.has(race); }
+// Reconcile the handful of vendor source labels that differ from the authoritative roster.
+const SCORE_RACE_ALIASES = Object.freeze({
+  'MS Circuit Court Judge, District 12, Place 2':'MS Circuit Court Judge, District 14, Place 2',
+  'NC District Court Judge, District 6, Seat 2, New Hanover-Pender Counties':'NC District Court Judge, District 6, Seat 2, New Hanover/Pender Counties',
+  'NC District Court Judge, District 6, Seat 3, New Hanover-Pender Counties':'NC District Court Judge, District 6, Seat 3, New Hanover/Pender Counties',
+  'NC District Court Judge, District 6, Seat 4, New Hanover-Pender Counties':'NC District Court Judge, District 6, Seat 4, New Hanover/Pender Counties'
+});
+function canonicalScoreRace(race){ return SCORE_RACE_ALIASES[race] || race; }
+const SOURCE_RACE_LABEL_BY_CANONICAL = Object.freeze(Object.fromEntries(Object.entries(SCORE_RACE_ALIASES).map(([source,canonical])=>[canonical,source])));
+function sourceRaceLabel(canonicalRace){ return SOURCE_RACE_LABEL_BY_CANONICAL[canonicalRace] || canonicalRace; }
 let CITATION_DATA_COVERAGE={};
 let SCORE_BOOTSTRAP=null, FULL_SCORE_DATA_READY=false, fullScoreDataPromise=null;
 let INCLUDE_REFUSAL_VISIBILITY = sessionStorage.getItem('aeo_include_refusal_visibility') === '1';
@@ -964,7 +978,7 @@ function ensureCitationRaceSummaryLoaded(){
       if(raw?.artifact_category!=='citation_breakout_first_paint_overview' || !Array.isArray(raw?.columns) || !raw.columns.includes('race') || raw.columns.includes('topic') ||
           raw?.source?.citation_summary_sha256!==CITATION_OVERVIEW?.source?.citation_summary_sha256)
         throw new Error('race-filterable citation overview does not match the first-paint release');
-      CITATION_RACE_SUMMARY_EVENTS=buildCitationEventsFromRaw(raw);
+      CITATION_RACE_SUMMARY_EVENTS=buildCitationEventsFromRaw(raw).filter(event=>isTrackedScoreRace(event.race));
       return CITATION_RACE_SUMMARY_EVENTS;
     }).catch(error=>{ citationRaceSummaryLoadPromise=null; throw error; });
   }
@@ -980,7 +994,7 @@ function ensureCitationFullSummaryLoaded(){
       if(!Array.isArray(raw?.columns) || !raw.columns.includes('topic') || !Number.isInteger(raw?.row_count) ||
           raw.row_count!==CITATION_OVERVIEW?.source?.source_row_count)
         throw new Error('full citation summary does not match the first-paint overview');
-      CITATION_FULL_EVENTS=buildCitationEventsFromRaw(raw);
+      CITATION_FULL_EVENTS=buildCitationEventsFromRaw(raw).filter(event=>isTrackedScoreRace(event.race));
       return CITATION_FULL_EVENTS;
     }).catch(error=>{ citationFullSummaryLoadPromise=null; throw error; });
   }
@@ -1000,14 +1014,14 @@ function ensureCitationRaceLoaded(race){
   }
   if(!citationRaceLoadPromises[race]){
     citationRaceLoadPromises[race] = citationRaceManifestPromise.then(manifest=>{
-      const entry=manifest[race];
+      const entry=manifest[race] || manifest[sourceRaceLabel(race)];
       if(!entry) throw new Error('No citation partition is available for '+race+'.');
       return fetch(citationAssetUrl('citation_races/'+encodeURIComponent(entry.file))).then(r=>{
         if(!r.ok) throw new Error('citation race detail unavailable ('+r.status+')');
         return r.json();
       });
     }).then(raw=>{
-      const events=buildCitationEventsFromRaw(raw);
+      const events=buildCitationEventsFromRaw(raw).filter(event=>isTrackedScoreRace(event.race));
       CITATION_RACE_EVENTS[race]=events;
       return events;
     }).catch(error=>{
@@ -1029,7 +1043,7 @@ function ensurePartnerCitationsLoaded(partner){
       }),
       ensureCitationCoverageLoaded(),
     ]).then(([raw])=>{
-      const events=buildCitationEventsFromRaw(raw);
+      const events=buildCitationEventsFromRaw(raw).filter(event=>isTrackedScoreRace(event.race));
       PARTNER_CITATION_EVENTS[assetKey]=events;
       return events;
     });
@@ -1091,7 +1105,7 @@ function ensureCitationCrossRaceIndex(kind, key){
       if(!entry || !entry.relative_path) throw new Error('cross-race citation index is unavailable for '+key);
       return fetchCrossRaceCitationJson(entry.relative_path,'cross-race citation index');
     }).then(raw=>{
-      const events=buildCitationEventsFromRaw(raw);
+      const events=buildCitationEventsFromRaw(raw).filter(event=>isTrackedScoreRace(event.race));
       CITATION_CROSS_RACE_INDEX_EVENTS[cacheKey]=events;
       return events;
     }).catch(error=>{
@@ -1368,11 +1382,12 @@ async function loadScoreBootstrap(){
   SCORE_BOOTSTRAP=raw;
 }
 function buildFromScoreBootstrap(){
-  ROSTER = SCORE_BOOTSTRAP.roster.map(r=>({
+  ROSTER = SCORE_BOOTSTRAP.roster.map((r,sourceIdx)=>({
     name:r.candidate_name, party:r.candidate_party_affiliation, candidateType:r.candidate_type,
     opponent:r.opponent_name||null, opponent_party:r.opponent_party_affiliation||null, opponentType:r.opponent_type,
-    state:r.state, location:r.location, office:r.office_name, race:r.race, race_level:r.race_level, race_type:r.race_type
-  }));
+    state:r.state, location:r.location, office:r.office_name, race:r.race, race_level:r.race_level, race_type:r.race_type,
+    sourceIdx
+  })).filter(r=>isTrackedScoreRace(r.race));
   RACE_IDX_BY_RACE={}; ROSTER.forEach((r,i)=>RACE_IDX_BY_RACE[r.race]=i);
   ENTITIES=[];
   ROSTER.forEach((r,i)=>{
@@ -1380,7 +1395,14 @@ function buildFromScoreBootstrap(){
     if(r.opponent) ENTITIES.push({id:'o'+i,raceIdx:i,role:'opp',name:r.opponent,party:r.opponent_party,candidateType:r.opponentType,state:r.state,location:r.location,office:r.office,race:r.race,race_level:r.race_level,race_type:r.race_type,opponentId:'c'+i});
   });
   DATES=[...SCORE_BOOTSTRAP.dates];
-  METRICS=INCLUDE_REFUSAL_VISIBILITY ? SCORE_BOOTSTRAP.metrics_including_refusals : SCORE_BOOTSTRAP.metrics;
+  // Metric keys retain the source export's 108-row ordinal. Re-key them after excluding LA
+  // so cN/oN stays aligned with the compact, visible 107-race roster.
+  const sourceMetrics=INCLUDE_REFUSAL_VISIBILITY ? SCORE_BOOTSTRAP.metrics_including_refusals : SCORE_BOOTSTRAP.metrics;
+  METRICS={};
+  ROSTER.forEach((r,i)=>{
+    METRICS['c'+i]=sourceMetrics['c'+r.sourceIdx];
+    if(r.opponent) METRICS['o'+i]=sourceMetrics['o'+r.sourceIdx];
+  });
   TEXT={}; ROWS_BY_RACE={}; PROMPTS=[]; PROMPTS_BY_RACE={}; PROMPT_NARR_TESTED={};
   PROMPT_INDEX=SCORE_BOOTSTRAP.prompt_index||{};
   buildFilterOptionLists();
@@ -1634,7 +1656,7 @@ function dailyBucketShare(entityId, dim, dayIdx, modelFilter, blindOverride){
     return {'1':one, '0':100-one};
   }
   const field = dim==='narrative' ? 'narrative_alignment_score_'+side : dim+'_score_'+side;
-  const vals = dayRows.map(r=>r[field]).filter(v=>v!==''&&v!=null);
+  const vals = dayRows.map(r=>r[field]).filter(isValidBucketScore);
   if(!vals.length) return zero;
   const total = vals.length;
   return {'0':100*vals.filter(v=>v==='0').length/total, '1':100*vals.filter(v=>v==='1').length/total, '2':100*vals.filter(v=>v==='2').length/total};
@@ -1815,7 +1837,7 @@ function buildCitationEventsFromRaw(raw){
   const col = name => cd[name] || null;
   const events = new Array(raw.row_count);
   for(let i=0;i<raw.row_count;i++){
-    const race = col('race') ? cd.race[i] : null;
+    const race = col('race') ? canonicalScoreRace(cd.race[i]) : null;
     const raceIdx = race ? RACE_IDX_BY_RACE[race] : null;
     const rosterRow = raceIdx===null || raceIdx===undefined ? null : ROSTER[raceIdx];
     // The first-paint roll-up deliberately omits individual domains. Its source
@@ -1857,7 +1879,7 @@ function buildCitationEventsFromRaw(raw){
   return events;
 }
 function buildCitationEvents(){
-  CITATION_EVENTS = buildCitationEventsFromRaw(CITATIONS_RAW);
+  CITATION_EVENTS = buildCitationEventsFromRaw(CITATIONS_RAW).filter(event=>isTrackedScoreRace(event.race));
   // The vendor ledger audits whether expected files arrived.  This independent continuity ledger
   // audits whether every race already active in this release actually has citation rows that day.
   // It caught Sep. 28/29: all files were delivered, but the 34 CO-04/WS3/WS4 races disappeared
@@ -1915,7 +1937,7 @@ function citationWorkstreamOptions(){
 }
 
 function buildFromFetchedData(){
-  ROSTER = ROSTER_RAW.map(r=>({
+  ROSTER = ROSTER_RAW.filter(r=>isTrackedScoreRace(r.race)).map(r=>({
     name: r.candidate_name, party: r.candidate_party_affiliation, candidateType: r.candidate_type,
     opponent: r.opponent_name || null, opponent_party: r.opponent_party_affiliation || null, opponentType: r.opponent_type || null,
     state: r.state, location: r.location, office: r.office_name,
@@ -1930,6 +1952,8 @@ function buildFromFetchedData(){
   });
 
   aggRowsCache = aggRows();
+  aggRowsCache.forEach(r=>{ r.race=canonicalScoreRace(r.race); });
+  aggRowsCache = aggRowsCache.filter(r=>isTrackedScoreRace(r.race));
   // rowsForEntity()/dailyBucketShare() used to re-scan the ENTIRE 591k-row aggRowsCache by race on
   // every call -- at real data scale, called once per entity (143) per dimension per page (and
   // again per day for trend charts), this was O(rows x entities) repeated many times over and was
@@ -1966,7 +1990,7 @@ function buildFromFetchedData(){
     (NARR_GAPS_BY_ROW[k] = NARR_GAPS_BY_ROW[k]||[]).push(g.missing_topic);
   });
 
-  PROMPTS = Object.values(PROMPT_INDEX).map(r=>{
+  PROMPTS = Object.values(PROMPT_INDEX).filter(r=>RACE_IDX_BY_RACE[r.race]!=null).map(r=>{
     const raceIdx = RACE_IDX_BY_RACE[r.race];
     const dims = (r.dimensions_assessed||'').split(',').map(s=>s.trim()).map(d=>CAT_TO_DIMKEY[d]||d.toLowerCase()).filter(Boolean);
     return {
@@ -2021,8 +2045,13 @@ function narrativeTestedTopics(level){
 
 function avg(arr){ const v=arr.filter(x=>x!==null&&x!==undefined&&!Number.isNaN(x)); return v.length? v.reduce((a,b)=>a+b,0)/v.length : null; }
 function stddev(arr){ const v=arr.filter(x=>x!==null&&x!==undefined&&!Number.isNaN(x)); if(v.length<2) return 0; const m=avg(v); return Math.sqrt(avg(v.map(x=>(x-m)*(x-m)))); }
+function isValidBucketScore(v){
+  if(v==='' || v===null || v===undefined) return false;
+  const n=+v;
+  return n===0 || n===1 || n===2;
+}
 function pctScored2(rows, field){
-  const vals = rows.map(r=>r[field]).filter(v=>v!==''&&v!==null&&v!==undefined);
+  const vals = rows.map(r=>r[field]).filter(isValidBucketScore);
   if(!vals.length) return null;
   return 100*vals.filter(v=>v==='2').length/vals.length;
 }
@@ -2073,7 +2102,7 @@ function buildMetrics(){
     };
     ['depth','accuracy','consistency','narrative'].forEach(dim=>{
       const field = dim==='narrative' ? 'narrative_alignment_score_'+side : dim+'_score_'+side;
-      const vals = rows.map(r=>r[field]).filter(v=>v!==''&&v!=null);
+      const vals = rows.map(r=>r[field]).filter(isValidBucketScore);
       bucketTotals[dim] = {buckets:{
         '0':vals.filter(v=>v==='0').length,
         '1':vals.filter(v=>v==='1').length,
@@ -2121,7 +2150,7 @@ function buildMetrics(){
           return;
         }
         const field = dim==='narrative' ? 'narrative_alignment_score_'+side : dim+'_score_'+side;
-        const vals = dayRows.map(r=>r[field]).filter(v=>v!==''&&v!=null);
+        const vals = dayRows.map(r=>r[field]).filter(isValidBucketScore);
         history[dim].push(pctScored2(dayRows, field));
         history3[dim].push(vals.length
           ? {'0':100*vals.filter(v=>v==='0').length/vals.length, '1':100*vals.filter(v=>v==='1').length/vals.length, '2':100*vals.filter(v=>v==='2').length/vals.length}
@@ -2312,7 +2341,8 @@ function runViewFromRow(row, model, dateStr){
         }
         const field = dim==='narrative' ? 'narrative_alignment_score_'+side : dim+'_score_'+side;
         const v = row[field];
-        out[dim] = (v!==''&&v!=null) ? +v : null;
+        const parsed = (v!==''&&v!=null) ? +v : null;
+        out[dim] = (parsed===0 || parsed===1 || parsed===2) ? parsed : null;
       });
       return out;
     }
@@ -3658,6 +3688,7 @@ function scoresByCategoryForEntity(ent, key, topicFilter, modelFilter, rangeOver
   // drill-down, which needs real response text) -- they just don't each add their own count
   // toward the headline percentage anymore.
   const isPromptLevel = key==='visibility' || key==='favorability';
+  const seenPromptLevel = new Set();
   function ensureBucket(dict, k){ if(!dict[k]) dict[k] = {buckets:{}, total:0, items:[]}; return dict[k]; }
   const addPct = (dict, vals)=>{ Object.entries(vals).forEach(([b,v])=>{ dict.buckets[b]=(dict.buckets[b]||0)+v; }); dict.total += 100; };
   prompts.forEach(p=>{
@@ -3682,8 +3713,12 @@ function scoresByCategoryForEntity(ent, key, topicFilter, modelFilter, rangeOver
             // the headline percentage above comes from addPct's fractional accumulation, not this.
             const item = {prompt:p, score:+v, model:m, bucket: (+v>=50?'1':'0'), date:dateStr, response:run.response, run, missingTopics: run.missingTopics ? run.missingTopics[side] : []};
             catBucket.items.push(item); if(topicBucket) topicBucket.items.push(item);
-            const vals = {'1':+v, '0':100-(+v)};
-            addPct(catBucket, vals); if(topicBucket) addPct(topicBucket, vals);
+            const aggregateKey = p.id+'|'+dateStr+(modelFilter ? '|'+m : '');
+            if(!seenPromptLevel.has(aggregateKey)){
+              seenPromptLevel.add(aggregateKey);
+              const vals = {'1':+v, '0':100-(+v)};
+              addPct(catBucket, vals); if(topicBucket) addPct(topicBucket, vals);
+            }
           } else {
             const pos = run._row['prompt_level_favorability_pct_positive_'+rowSide];
             if(pos===''||pos==null) return;
@@ -3693,8 +3728,12 @@ function scoresByCategoryForEntity(ent, key, topicFilter, modelFilter, rangeOver
             const bucket = pos>=neu && pos>=neg ? 'pos' : (neg>=neu && neg>=pos ? 'neg' : 'neu');
             const item = {prompt:p, score: 50 + (+pos - neg)/2, model:m, bucket, date:dateStr, response:run.response, run, missingTopics: run.missingTopics ? run.missingTopics[side] : []};
             catBucket.items.push(item); if(topicBucket) topicBucket.items.push(item);
-            const vals = {pos:+pos, neu, neg};
-            addPct(catBucket, vals); if(topicBucket) addPct(topicBucket, vals);
+            const aggregateKey = p.id+'|'+dateStr+(modelFilter ? '|'+m : '');
+            if(!seenPromptLevel.has(aggregateKey)){
+              seenPromptLevel.add(aggregateKey);
+              const vals = {pos:+pos, neu, neg};
+              addPct(catBucket, vals); if(topicBucket) addPct(topicBucket, vals);
+            }
           }
           return;
         }
@@ -4213,7 +4252,8 @@ function renderBucket3Charts(key, fCmp, fTrend){
   const topicOpt = (catOpt && topicSelEl && topicSelEl.value!=='all') ? topicSelEl.value : null;
   // Visibility is binary — show only the "mentioned" share, not a mentioned/not-mentioned pair.
   const order = (key==='visibility') ? ['1'] : bucket3Order(key);
-  const [cmpI0,cmpI1] = dateRangeIdx(key+'-cmp');
+  const cmpRange = dateRangeIdx(key+'-cmp');
+  const [cmpI0,cmpI1] = cmpRange;
   function bucketsFor(ent){
     if(!ent) return {buckets:{},total:0};
     if(catOpt){ const d = scoresByCategoryForEntity(ent,key,topicOpt,null,[cmpI0,cmpI1],fCmp.blind); return d.byCategory[catOpt] || {buckets:{},total:0}; }
@@ -6257,7 +6297,7 @@ function saChartRange(prefix){ return {start:document.getElementById(prefix+'-st
 function saChartSourceTypes(prefix){ return [...document.querySelectorAll(`[data-sa-chart-source="${prefix}"]:checked`)].map(el=>el.dataset.source); }
 function saChartFiltersHtml(prefix, sites, minDate, maxDate, citationTypes=false){
   const sourceControls=citationTypes?`<div class="fitem"><label>Citation type</label><div style="display:flex;gap:7px;flex-wrap:wrap;max-width:310px;padding:5px 0;"><label style="font-size:11px;text-transform:none;letter-spacing:0;color:var(--ink-soft);"><input type="checkbox" data-sa-chart-source="${prefix}" data-source="sources_cited" checked> Cited</label><label style="font-size:11px;text-transform:none;letter-spacing:0;color:var(--ink-soft);"><input type="checkbox" data-sa-chart-source="${prefix}" data-source="related_more" checked> Related</label><label style="font-size:11px;text-transform:none;letter-spacing:0;color:var(--ink-soft);"><input type="checkbox" data-sa-chart-source="${prefix}" data-source="sources_search" checked> Search</label></div></div>`:'';
-  return `<div class="filterbar" style="margin:8px 0 10px;"><div class="fitem"><label>Sites</label><select id="${prefix}-sites" multiple size="3">${sites.map(s=>`<option value="${escXAttr(s.id)}" selected>${escXHtml(s.name)}</option>`).join('')}</select></div><div class="fitem"><label>From</label><input type="date" id="${prefix}-start" value="${escXAttr(minDate)}" min="${escXAttr(minDate)}" max="${escXAttr(maxDate)}"></div><div class="fitem"><label>To</label><input type="date" id="${prefix}-end" value="${escXAttr(maxDate)}" min="${escXAttr(minDate)}" max="${escXAttr(maxDate)}"></div>${sourceControls}</div>`;
+  return `<div class="filterbar sa-chart-filter" style="margin:8px 0 10px;"><div class="fitem"><label>Sites</label><select id="${prefix}-sites" multiple size="3">${sites.map(s=>`<option value="${escXAttr(s.id)}" selected>${escXHtml(s.name)}</option>`).join('')}</select></div><div class="fitem"><label>From</label><input type="date" id="${prefix}-start" value="${escXAttr(minDate)}" min="${escXAttr(minDate)}" max="${escXAttr(maxDate)}"></div><div class="fitem"><label>To</label><input type="date" id="${prefix}-end" value="${escXAttr(maxDate)}" min="${escXAttr(minDate)}" max="${escXAttr(maxDate)}"></div>${sourceControls}</div>`;
 }
 function saInRange(row, ids, range){ return ids.includes(row.id||row.site_id) && (!range.start || row.date>=range.start) && (!range.end || row.date<=range.end); }
 function saDays(start,end){
@@ -6376,7 +6416,9 @@ function buildSiteAnalyticsPage(){
     <div class="card section-gap"><div class="card-title">Published article inventory</div><div class="card-caption">Every published canonical AEO article for the selected sites, grouped by the state of its controlled candidate tags. Select a candidate to see every tagged article in the selected-site scope. Metrics respect the selected dates and citation types. The top-line traffic totals additionally include home, topic, and other indexable pages on each selected domain.</div><div class="filterbar" style="margin:10px 0;"><div class="fitem"><label>Candidate mention</label><select id="sa-article-candidate">${saArticleCandidateOptions()}</select></div><div class="fitem"><label>Grouping</label><div class="small-muted" style="padding:8px 0;">State · controlled candidate metadata</div></div></div><div class="scroll-table" id="sa-articles"></div></div>`;
   document.getElementById('sa-all').addEventListener('click',()=>{ [...document.getElementById('sa-sites').options].forEach(o=>o.selected=true); renderSiteAnalytics(); });
   document.getElementById('sa-none').addEventListener('click',()=>{ [...document.getElementById('sa-sites').options].forEach(o=>o.selected=false); renderSiteAnalytics(); });
-  page.querySelectorAll('select,input').forEach(el=>el.addEventListener('change',()=>{ window.__saDrill={level:'site'}; renderSiteAnalytics(); }));
+  // Portfolio-wide controls redraw the suite. Individual chart controls redraw only that chart,
+  // preserving selections and avoiding an expensive full-page rebuild on every change.
+  page.querySelectorAll('#sa-sites,#sa-start,#sa-end,[data-sa-source],.sa-chart-filter select,.sa-chart-filter input').forEach(el=>el.addEventListener('change',()=>{ window.__saDrill={level:'site'}; renderSiteAnalytics(); }));
   window.__saDrill={level:'site'};
   renderSiteAnalytics();
   buildArticleCitationPenetration();
