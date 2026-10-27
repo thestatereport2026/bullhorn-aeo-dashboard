@@ -758,14 +758,14 @@ const SCORE_RELEASE_PREFIX = 'score-releases/refresh-sep28-oct11-20261014-v2/';
 // This derivative is immutable and records the exact source aggregate it summarizes. Keeping it
 // separate from the raw score release means adding a performance view never mutates scoring data.
 const SCORE_BOOTSTRAP_PREFIX = 'score-bootstrap-releases/refresh-sep28-oct11-20261025-v6/';
-const CITATION_RELEASE_PREFIX = 'citation-releases/refresh-oct17-oct20-20261023-v1/';
+const CITATION_RELEASE_PREFIX = 'citation-releases/refresh-oct21-oct25-20261026-v1/';
 // The first Citation Breakout paint uses a tiny exact all-race roll-up. Race,
 // office, and state filtering fetch the larger no-topic cube only when used;
 // the full topic cube remains deferred until a reader actually selects a topic.
 // This overlay is derived from (but never mutates) the sealed citation release above.  It adds
 // cross-race category/prompt-type drill-downs without making the initial Citation Breakout load
 // the complete Sources-URL corpus.
-const CITATION_DETAIL_RELEASE_PREFIX = 'citation-detail-releases/refresh-oct17-oct20-20261023-v1/';
+const CITATION_DETAIL_RELEASE_PREFIX = 'citation-detail-releases/refresh-oct21-oct25-20261026-v1/';
 const SITE_ANALYTICS_RELEASE_PREFIX = 'site-analytics-releases/gsc-refresh-20261023-v2/';
 function scoreAssetUrl(relPath){ return heavyAssetUrl(SCORE_RELEASE_PREFIX + relPath); }
 function scoreBootstrapUrl(relPath){ return heavyAssetUrl(SCORE_BOOTSTRAP_PREFIX + relPath); }
@@ -777,7 +777,7 @@ function siteAnalyticsAssetUrl(relPath){ return heavyAssetUrl(SITE_ANALYTICS_REL
 // download the full citation corpus.  Its immutable release is generated from the same validated
 // citation release as the dashboard's core reports.  Raw evidence stays outside the browser
 // asset, while current-snapshot URL/prompt/provider detail remains available for drilldowns.
-const OWNED_DOMAINS_RELEASE_PREFIX = 'owned-domain-releases/owned-domains-2026-10-23-v25-protected-costs/';
+const OWNED_DOMAINS_RELEASE_PREFIX = 'owned-domain-releases/owned-domains-2026-10-26-v26/';
 const OWNED_VOICE_RELEASE_PREFIX = 'owned-voice-releases/observed-oct11-20261018-v1/';
 let ownedDomainsLoadPromise = null;
 let ownedDomainsDetailLoadPromise = null;

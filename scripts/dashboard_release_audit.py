@@ -34,6 +34,17 @@ METRIC_NAMES = ("visibility", "favorability", "depth", "accuracy", "narrative", 
 VALID_CITATION_TYPES = {"sources_cited", "sources_search", "sources_more", "sources_references"}
 SNAPSHOT_DIMS = ("visibility", "favorability", "depth", "accuracy", "narrative")
 SNAPSHOT_WEIGHTS = {"visibility": 0.40, "favorability": 0.15, "depth": 0.15, "accuracy": 0.15, "narrative": 0.15}
+REQUIRED_METRIC_STATUS = {
+    "citation_breakout",
+    "owned_domain_visibility_and_coverage",
+    "owned_domain_on_topic_citation_rate",
+    "owned_domain_citation_yield_and_peer_rank",
+    "owned_domain_answer_quality",
+    "owned_domain_share_of_voice",
+    "score_dimensions_and_aggregate",
+    "site_analytics_search_traffic",
+}
+VALID_METRIC_STATES = {"updated", "retained", "blocked", "not_applicable"}
 
 
 def raw_score_dimension(dim):
@@ -374,6 +385,36 @@ def audit_dashboard_contract(audit, dashboard):
         audit.check(name, passed, "present" if passed else "required marker missing")
 
 
+def audit_metric_refresh_status(audit, source):
+    """Require an explicit disposition for every dashboard metric family.
+
+    A citation-only delivery must never be described as a full dashboard refresh by
+    omission.  Metrics that cannot refresh (for example, Share of Voice without
+    new raw responses) are valid only when the release records their last measured
+    date, the freshest available input date, and the concrete reason.
+    """
+    raw, _ = load_json(source)
+    metrics = raw.get("metrics") if isinstance(raw, dict) else None
+    audit.check("metric freshness manifest has a metrics registry", isinstance(metrics, dict), f"source={source}")
+    if not isinstance(metrics, dict):
+        return
+    missing = sorted(REQUIRED_METRIC_STATUS - set(metrics))
+    extra = sorted(set(metrics) - REQUIRED_METRIC_STATUS)
+    audit.check("metric freshness manifest covers every dashboard metric family", not missing, f"missing={missing}; extra={extra}")
+    for name in sorted(REQUIRED_METRIC_STATUS & set(metrics)):
+        row = metrics[name]
+        valid = isinstance(row, dict) and row.get("state") in VALID_METRIC_STATES
+        audit.check(f"metric freshness status is valid: {name}", valid, f"state={row.get('state') if isinstance(row, dict) else None}")
+        if not valid:
+            continue
+        if row["state"] in {"retained", "blocked"}:
+            complete = all(isinstance(row.get(field), str) and row.get(field) for field in ("reason", "last_measured_through", "available_input_through"))
+            audit.check(
+                f"stale metric has an explicit exception: {name}", complete,
+                f"last={row.get('last_measured_through')}; available={row.get('available_input_through')}; reason={row.get('reason')!r}",
+            )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--score-aggregate", required=True)
@@ -381,6 +422,7 @@ def main():
     parser.add_argument("--citation-summary", required=True)
     parser.add_argument("--citation-manifest")
     parser.add_argument("--expected-through")
+    parser.add_argument("--metric-status", required=True, help="Versioned metric-freshness manifest. Every metric family must be marked updated, retained, blocked, or not applicable.")
     parser.add_argument("--dashboard", default="index.html")
     parser.add_argument("--report", required=True)
     args = parser.parse_args()
@@ -394,6 +436,7 @@ def main():
         audit_cross_workstream_snapshot_views(audit, bootstrap)
         audit_citations(audit, citation, manifest, races, dates, args.expected_through)
         audit_dashboard_contract(audit, args.dashboard)
+        audit_metric_refresh_status(audit, args.metric_status)
     except Exception as exc:
         audit.check("audit execution", False, f"{type(exc).__name__}: {exc}")
     report = audit.payload()

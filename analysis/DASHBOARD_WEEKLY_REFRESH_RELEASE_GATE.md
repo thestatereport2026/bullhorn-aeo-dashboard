@@ -4,6 +4,15 @@ Run the release gate after producing the score bootstrap and citation release, b
 dashboard release pointers or deploying `index.html`. A refresh is not finished until the command
 exits successfully and its JSON report is saved alongside that release's audit artifacts.
 
+Every refresh also needs a versioned **metric-freshness manifest**. It records a disposition for
+every metric family: `updated`, `retained`, `blocked`, or `not_applicable`. This explicitly
+includes citation footprint/coverage, **on-topic citation rate**, citation yield, peer rank,
+answer quality, and Share of Voice. A retained or blocked
+metric must name its last measured date, freshest available input date, and reason. This makes a
+citation-only refresh explicit: Share of Voice, answer quality, and score dimensions may remain
+at their last valid date when no newer raw scored responses are delivered, but they may never be
+silently omitted from the release decision.
+
 ```sh
 python3 scripts/dashboard_release_audit.py \
   --score-aggregate 'gs://aeo-dashboard-assets-bullhorn/dashboard-data/score-releases/<release>/prompt_results_agg.json' \
@@ -11,6 +20,7 @@ python3 scripts/dashboard_release_audit.py \
   --citation-summary 'gs://aeo-dashboard-assets-bullhorn/dashboard-data/citation-releases/<release>/citations.json' \
   --citation-manifest 'gs://aeo-dashboard-assets-bullhorn/dashboard-data/citation-releases/<release>/citation_races/manifest.json' \
   --expected-through YYYY-MM-DD \
+  --metric-status 'analysis/dashboard_metric_refresh_status_YYYY-MM-DD.json' \
   --dashboard index.html \
   --report 'analysis/dashboard_refresh_audits/YYYY-MM-DD_<release>.json'
 ```

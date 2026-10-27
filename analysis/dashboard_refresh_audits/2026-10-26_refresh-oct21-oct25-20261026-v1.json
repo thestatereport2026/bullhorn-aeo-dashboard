@@ -1,0 +1,321 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-27T00:01:29.348571+00:00",
+  "status": "passed",
+  "checks": [
+    {
+      "name": "score bootstrap has a supported browser contract",
+      "passed": true,
+      "detail": "schema=1 category=dashboard_score_bootstrap",
+      "blocking": true
+    },
+    {
+      "name": "score bootstrap retains daily denominators for date and kickoff views",
+      "passed": true,
+      "detail": "metric_sets=2 dates=35",
+      "blocking": true
+    },
+    {
+      "name": "score release has response rows",
+      "passed": true,
+      "detail": "1,792,952 rows",
+      "blocking": true
+    },
+    {
+      "name": "score dates equal bootstrap dates",
+      "passed": true,
+      "detail": "score=35 bootstrap=35",
+      "blocking": true
+    },
+    {
+      "name": "bootstrap source hash ties to raw score release",
+      "passed": true,
+      "detail": "expected=9fd880bed2396067d452aadc30ac1ada694845de87edae66ee4d54a8a291be2d actual=9fd880bed2396067d452aadc30ac1ada694845de87edae66ee4d54a8a291be2d",
+      "blocking": true
+    },
+    {
+      "name": "dashboard roster remains 107 races",
+      "passed": true,
+      "detail": "107 races",
+      "blocking": true
+    },
+    {
+      "name": "full score race universe ties to roster",
+      "passed": true,
+      "detail": "score=107 roster=107",
+      "blocking": true
+    },
+    {
+      "name": "candidate prompt-level visibility is sample-stable",
+      "passed": true,
+      "detail": "cells=100,230 conflicts=0",
+      "blocking": true
+    },
+    {
+      "name": "opponent prompt-level visibility is sample-stable",
+      "passed": true,
+      "detail": "cells=97,945 conflicts=0",
+      "blocking": true
+    },
+    {
+      "name": "only documented malformed score buckets occur",
+      "passed": true,
+      "detail": "unexpected=0",
+      "blocking": true
+    },
+    {
+      "name": "known malformed bucket is explicitly excluded",
+      "passed": true,
+      "detail": "documented=1",
+      "blocking": false
+    },
+    {
+      "name": "standard bootstrap has all visible entities",
+      "passed": true,
+      "detail": "missing=0",
+      "blocking": true
+    },
+    {
+      "name": "standard base metrics exactly tie to raw",
+      "passed": true,
+      "detail": "checked=1254 mismatches=0",
+      "blocking": true
+    },
+    {
+      "name": "include_refusals bootstrap has all visible entities",
+      "passed": true,
+      "detail": "missing=0",
+      "blocking": true
+    },
+    {
+      "name": "include_refusals base metrics exactly tie to raw",
+      "passed": true,
+      "detail": "checked=1254 mismatches=0",
+      "blocking": true
+    },
+    {
+      "name": "cross-workstream kickoff covers 107 tracked races",
+      "passed": true,
+      "detail": "races=107",
+      "blocking": true
+    },
+    {
+      "name": "cross-workstream kickoff uses only observed first checkpoints",
+      "passed": true,
+      "detail": "dates=2026-08-31, 2026-09-25",
+      "blocking": true
+    },
+    {
+      "name": "reference date snapshots are present",
+      "passed": true,
+      "detail": "missing=[]",
+      "blocking": true
+    },
+    {
+      "name": "Aggregate kickoff snapshot has all five party dimensions",
+      "passed": true,
+      "detail": "Democrats: visibility=77.7, favorability=50.6, depth=43.9, accuracy=53.6, narrative=55.5, composite=61.6; Republicans: visibility=76.9, favorability=49.0, depth=49.3, accuracy=55.4, narrative=49.0, composite=61.2",
+      "blocking": true
+    },
+    {
+      "name": "Aggregate 2026-10-11 snapshot has all five party dimensions",
+      "passed": true,
+      "detail": "Democrats: visibility=83.1, favorability=50.3, depth=51.8, accuracy=68.5, narrative=63.6, composite=68.4; Republicans: visibility=82.4, favorability=48.9, depth=51.4, accuracy=66.2, narrative=56.3, composite=66.4",
+      "blocking": true
+    },
+    {
+      "name": "Aggregate 2026-10-05 through 2026-10-11 snapshot has all five party dimensions",
+      "passed": true,
+      "detail": "Democrats: visibility=82.6, favorability=50.3, depth=52.7, accuracy=71.1, narrative=62.3, composite=68.5; Republicans: visibility=82.1, favorability=48.9, depth=53.4, accuracy=69.9, narrative=55.6, composite=67.0",
+      "blocking": true
+    },
+    {
+      "name": "citation release has rows",
+      "passed": true,
+      "detail": "1,073,078 rows",
+      "blocking": true
+    },
+    {
+      "name": "citation race universe ties to roster",
+      "passed": true,
+      "detail": "citation=107 roster=107",
+      "blocking": true
+    },
+    {
+      "name": "citation dates are ordered and usable",
+      "passed": true,
+      "detail": "citation=50 score=35",
+      "blocking": true
+    },
+    {
+      "name": "refresh reaches requested endpoint",
+      "passed": true,
+      "detail": "latest=2026-10-25 expected=2026-10-25",
+      "blocking": true
+    },
+    {
+      "name": "citation counts are non-negative",
+      "passed": true,
+      "detail": "invalid=0",
+      "blocking": true
+    },
+    {
+      "name": "all citation types have dashboard controls",
+      "passed": true,
+      "detail": "unexpected=",
+      "blocking": true
+    },
+    {
+      "name": "citation manifest ties to roster",
+      "passed": true,
+      "detail": "manifest=107 roster=107",
+      "blocking": true
+    },
+    {
+      "name": "citation manifest entries are usable",
+      "passed": true,
+      "detail": "invalid=0",
+      "blocking": true
+    },
+    {
+      "name": "score bootstrap contract supports published release labels",
+      "passed": true,
+      "detail": "present",
+      "blocking": true
+    },
+    {
+      "name": "Aggregate supports an explicit cross-workstream kickoff",
+      "passed": true,
+      "detail": "present",
+      "blocking": true
+    },
+    {
+      "name": "107-race exclusion is implemented",
+      "passed": true,
+      "detail": "present",
+      "blocking": true
+    },
+    {
+      "name": "race aliases are canonicalized",
+      "passed": true,
+      "detail": "present",
+      "blocking": true
+    },
+    {
+      "name": "invalid buckets are rejected",
+      "passed": true,
+      "detail": "present",
+      "blocking": true
+    },
+    {
+      "name": "citation controls use one filter function",
+      "passed": true,
+      "detail": "present",
+      "blocking": true
+    },
+    {
+      "name": "dimension comparison passes date cohort",
+      "passed": true,
+      "detail": "present",
+      "blocking": true
+    },
+    {
+      "name": "prompt-level rollups de-duplicate",
+      "passed": true,
+      "detail": "present",
+      "blocking": true
+    },
+    {
+      "name": "Site Analytics chart controls stay isolated",
+      "passed": true,
+      "detail": "present",
+      "blocking": true
+    },
+    {
+      "name": "metric freshness manifest has a metrics registry",
+      "passed": true,
+      "detail": "source=dashboard_deploy/analysis/dashboard_metric_refresh_status_2026-10-26.json",
+      "blocking": true
+    },
+    {
+      "name": "metric freshness manifest covers every dashboard metric family",
+      "passed": true,
+      "detail": "missing=[]; extra=[]",
+      "blocking": true
+    },
+    {
+      "name": "metric freshness status is valid: citation_breakout",
+      "passed": true,
+      "detail": "state=updated",
+      "blocking": true
+    },
+    {
+      "name": "metric freshness status is valid: owned_domain_answer_quality",
+      "passed": true,
+      "detail": "state=retained",
+      "blocking": true
+    },
+    {
+      "name": "stale metric has an explicit exception: owned_domain_answer_quality",
+      "passed": true,
+      "detail": "last=2026-10-11; available=2026-10-11; reason='The validated score release still ends October 11. New citation delivery can refresh the cited cohort without inventing later score observations.'",
+      "blocking": true
+    },
+    {
+      "name": "metric freshness status is valid: owned_domain_citation_yield_and_peer_rank",
+      "passed": true,
+      "detail": "state=updated",
+      "blocking": true
+    },
+    {
+      "name": "metric freshness status is valid: owned_domain_on_topic_citation_rate",
+      "passed": true,
+      "detail": "state=updated",
+      "blocking": true
+    },
+    {
+      "name": "metric freshness status is valid: owned_domain_share_of_voice",
+      "passed": true,
+      "detail": "state=retained",
+      "blocking": true
+    },
+    {
+      "name": "stale metric has an explicit exception: owned_domain_share_of_voice",
+      "passed": true,
+      "detail": "last=2026-10-11; available=2026-10-11; reason='Share of Voice requires full raw answer text and citation evidence at the prompt-response level. No complete raw-response delivery after October 11 is available for this measurement.'",
+      "blocking": true
+    },
+    {
+      "name": "metric freshness status is valid: owned_domain_visibility_and_coverage",
+      "passed": true,
+      "detail": "state=updated",
+      "blocking": true
+    },
+    {
+      "name": "metric freshness status is valid: score_dimensions_and_aggregate",
+      "passed": true,
+      "detail": "state=retained",
+      "blocking": true
+    },
+    {
+      "name": "stale metric has an explicit exception: score_dimensions_and_aggregate",
+      "passed": true,
+      "detail": "last=2026-10-11; available=2026-10-11; reason='The validated scored-response release still ends October 11; citation files cannot substitute for scored responses.'",
+      "blocking": true
+    },
+    {
+      "name": "metric freshness status is valid: site_analytics_search_traffic",
+      "passed": true,
+      "detail": "state=retained",
+      "blocking": true
+    },
+    {
+      "name": "stale metric has an explicit exception: site_analytics_search_traffic",
+      "passed": true,
+      "detail": "last=2026-10-23; available=2026-10-23; reason='Search Console data is refreshed on its own reporting cadence and is not part of the Evertune citation delivery.'",
+      "blocking": true
+    }
+  ],
+  "errors": [],
+  "warnings": []
+}

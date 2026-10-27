@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "purpose": "Required metric-freshness disposition for the October 26 citation and Owned Domains refresh. A retained metric is an explicit exception, not an omitted step.",
+  "metrics": {
+    "citation_breakout": {
+      "state": "updated",
+      "available_input_through": "2026-10-25"
+    },
+    "owned_domain_visibility_and_coverage": {
+      "state": "updated",
+      "available_input_through": "2026-10-25"
+    },
+    "owned_domain_on_topic_citation_rate": {
+      "state": "updated",
+      "available_input_through": "2026-10-25"
+    },
+    "owned_domain_citation_yield_and_peer_rank": {
+      "state": "updated",
+      "available_input_through": "2026-10-25"
+    },
+    "owned_domain_answer_quality": {
+      "state": "retained",
+      "last_measured_through": "2026-10-11",
+      "available_input_through": "2026-10-11",
+      "reason": "The validated score release still ends October 11. New citation delivery can refresh the cited cohort without inventing later score observations."
+    },
+    "owned_domain_share_of_voice": {
+      "state": "retained",
+      "last_measured_through": "2026-10-11",
+      "available_input_through": "2026-10-11",
+      "reason": "Share of Voice requires full raw answer text and citation evidence at the prompt-response level. No complete raw-response delivery after October 11 is available for this measurement."
+    },
+    "score_dimensions_and_aggregate": {
+      "state": "retained",
+      "last_measured_through": "2026-10-11",
+      "available_input_through": "2026-10-11",
+      "reason": "The validated scored-response release still ends October 11; citation files cannot substitute for scored responses."
+    },
+    "site_analytics_search_traffic": {
+      "state": "retained",
+      "last_measured_through": "2026-10-23",
+      "available_input_through": "2026-10-23",
+      "reason": "Search Console data is refreshed on its own reporting cadence and is not part of the Evertune citation delivery."
+    }
+  }
+}
