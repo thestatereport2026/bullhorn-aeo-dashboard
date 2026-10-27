@@ -17,8 +17,9 @@ silently omitted from the release decision.
 python3 scripts/dashboard_release_audit.py \
   --score-aggregate 'gs://aeo-dashboard-assets-bullhorn/dashboard-data/score-releases/<release>/prompt_results_agg.json' \
   --score-bootstrap 'gs://aeo-dashboard-assets-bullhorn/dashboard-data/score-bootstrap-releases/<release>/score_bootstrap.json' \
-  --citation-summary 'gs://aeo-dashboard-assets-bullhorn/dashboard-data/citation-releases/<release>/citations.json' \
+  --citation-summary 'gs://aeo-dashboard-assets-bullhorn/dashboard-data/citation-releases/<release>/citation_summary.json' \
   --citation-manifest 'gs://aeo-dashboard-assets-bullhorn/dashboard-data/citation-releases/<release>/citation_races/manifest.json' \
+  --citation-first-paint 'gs://aeo-dashboard-assets-bullhorn/dashboard-data/citation-releases/<release>/citation_breakout_first_paint.json' \
   --expected-through YYYY-MM-DD \
   --metric-status 'analysis/dashboard_metric_refresh_status_YYYY-MM-DD.json' \
   --dashboard index.html \
@@ -39,6 +40,9 @@ The gate blocks a release when any of these fail:
 - Prompt-level visibility is inconsistent across samples/providers within a prompt-date cell.
 - A new malformed score bucket appears, a citation count is invalid, a citation source type lacks a
   dashboard control, or a citation manifest entry is unusable.
+- The compact Citation Breakout continuity ledger uses a different race universe than the browser.
+  In particular, the deliberately excluded LA Mayor race must not mark a complete 107-race date
+  range as partial and hide it when a reader applies a date filter.
 - Required dashboard protections for canonical races, invalid-score exclusion, prompt-level
   deduplication, date/prompt cohort propagation, citation filtering, and local Site Analytics
   filters are missing from the build.

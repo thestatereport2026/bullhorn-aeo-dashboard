@@ -285,6 +285,48 @@ def audit_citations(audit, citation, manifest, roster_races, score_dates, expect
         audit.check("citation manifest entries are usable", not invalid_entries, f"invalid={len(invalid_entries)}")
 
 
+def audit_citation_first_paint(audit, citation, first_paint):
+    """Ensure the compact Citation Breakout asset uses the 107-race browser universe.
+
+    The browser hides a date range when this ledger calls it partial.  Checking the
+    derived ledger against the full citation release prevents a non-tracked race
+    from silently suppressing an otherwise complete range.
+    """
+    audit.check(
+        "citation first-paint asset has expected category",
+        first_paint.get("artifact_category") == "citation_breakout_first_paint_global",
+        f"category={first_paint.get('artifact_category')!r}",
+    )
+    data = require_columns(citation, ["report_date", "race"])
+    observed = defaultdict(set)
+    first_seen = {}
+    for date, race in zip(data["report_date"], data["race"]):
+        race = canonical_race(race)
+        if race in EXCLUDED_RACES:
+            continue
+        observed[date].add(race)
+        if race not in first_seen or date < first_seen[race]:
+            first_seen[race] = date
+    expected_ledger = []
+    for date in sorted(observed):
+        expected = {race for race, first_date in first_seen.items() if first_date <= date}
+        present = observed[date]
+        missing = len(expected - present)
+        expected_ledger.append({
+            "date": date,
+            "status": "partial" if missing else "complete",
+            "observed_race_count": len(present),
+            "expected_race_count": len(expected),
+            "missing_race_count": missing,
+        })
+    actual_ledger = first_paint.get("race_continuity")
+    audit.check(
+        "citation first-paint continuity ledger ties to 107 tracked races",
+        actual_ledger == expected_ledger,
+        f"expected_dates={len(expected_ledger)} actual_dates={len(actual_ledger) if isinstance(actual_ledger, list) else 'invalid'}",
+    )
+
+
 def snapshot_share(entries, dimension):
     buckets, total = defaultdict(float), 0.0
     for metric, day_indexes in entries:
@@ -422,6 +464,7 @@ def main():
     parser.add_argument("--score-bootstrap", required=True)
     parser.add_argument("--citation-summary", required=True)
     parser.add_argument("--citation-manifest")
+    parser.add_argument("--citation-first-paint", help="Compact all-race Citation Breakout asset; validates its continuity ledger against the 107 tracked races.")
     parser.add_argument("--expected-through")
     parser.add_argument("--metric-status", required=True, help="Versioned metric-freshness manifest. Every metric family must be marked updated, retained, blocked, or not applicable.")
     parser.add_argument("--dashboard", default="index.html")
@@ -433,9 +476,12 @@ def main():
         bootstrap, _ = load_json(args.score_bootstrap)
         citation, _ = load_json(args.citation_summary)
         manifest = load_json(args.citation_manifest)[0] if args.citation_manifest else None
+        citation_first_paint = load_json(args.citation_first_paint)[0] if args.citation_first_paint else None
         races, dates = audit_scores(audit, score, score_hash, bootstrap)
         audit_cross_workstream_snapshot_views(audit, bootstrap)
         audit_citations(audit, citation, manifest, races, dates, args.expected_through)
+        if citation_first_paint is not None:
+            audit_citation_first_paint(audit, citation, citation_first_paint)
         audit_dashboard_contract(audit, args.dashboard)
         audit_metric_refresh_status(audit, args.metric_status)
     except Exception as exc:
