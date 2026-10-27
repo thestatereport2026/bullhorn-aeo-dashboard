@@ -377,6 +377,7 @@ def audit_dashboard_contract(audit, dashboard):
         "race aliases are canonicalized": "canonicalScoreRace" in text and "New Hanover-Pender" in text,
         "invalid buckets are rejected": "isValidBucketScore" in text,
         "citation controls use one filter function": "function filterCitationEvents(events)" in text,
+        "citation first paint requests the published release asset": "citation_breakout_first_paint.json" in text and "citation_breakout_first_paint_v2.json" not in text,
         "dimension comparison passes date cohort": "const cmpRange = dateRangeIdx(key+'-cmp')" in text,
         "prompt-level rollups de-duplicate": "seenPromptLevel" in text,
         "Site Analytics chart controls stay isolated": "sa-chart-filter" in text,

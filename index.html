@@ -954,7 +954,10 @@ function ensureCitationCoverageLoaded(){
 function ensureCitationsLoaded(){
   if(!citationsLoadPromise){
     citationsLoadPromise = Promise.all([
-      fetch(citationAssetUrl('citation_breakout_first_paint_v2.json')).then(r=>{ if(!r.ok) throw new Error('citation first-paint overview unavailable ('+r.status+')'); return r.json(); }),
+      // The refresh writer publishes this compact global cube under this exact
+      // immutable-release filename. Keep it small: race and topic partitions
+      // remain deferred until the reader actually filters or drills in.
+      fetch(citationAssetUrl('citation_breakout_first_paint.json')).then(r=>{ if(!r.ok) throw new Error('citation first-paint overview unavailable ('+r.status+')'); return r.json(); }),
       ensureCitationCoverageLoaded()
     ]).then(([raw, coverage])=>{
       if(raw?.artifact_category!=='citation_breakout_first_paint_global' || !Array.isArray(raw.columns) || !raw.columns.includes('prompt_category') || raw.columns.includes('topic') || raw.columns.includes('race'))
@@ -2613,7 +2616,16 @@ document.querySelectorAll('.nav-item').forEach(item=>{
           buildCitationsPage();
           PAGE_BUILT.citations = true;
           enhanceSelects(); collapseAllFilterbars();
-        }catch(e){ console.error('Citation data load failed', e); }
+        }catch(e){
+          console.error('Citation data load failed', e);
+          const citationPage=document.getElementById('page-citations');
+          citationPage.innerHTML=`<div class="page-head"><div><div class="page-title">Citation Breakout</div></div></div><div class="small-muted" style="padding:40px;text-align:center;color:#B23B3B;">Citation data could not load. <button type="button" id="citation-retry-load" style="margin-left:8px;padding:6px 10px;border:1px solid #B23B3B;border-radius:5px;background:#fff;color:#8f2222;cursor:pointer;">Retry</button></div>`;
+          document.getElementById('citation-retry-load')?.addEventListener('click',()=>{
+            citationsLoadPromise=null;
+            citationPage.innerHTML='<div class="page-head"><div><div class="page-title">Citation Breakout</div></div></div><div class="small-muted" style="padding:40px;text-align:center;">Loading citation data…</div>';
+            item.click();
+          });
+        }
       }
       return;
     }
