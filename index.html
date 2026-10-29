@@ -2125,9 +2125,9 @@ function buildMetrics(){
     // trend chart's default "all races" view calls dailyBucketShare ~148 times (74 races x 2
     // sides) on every single filter interaction on a dimension page -- previously uncached,
     // measured at ~1.9s just for this one chart, on top of everything else the page computes.
-    const history = {}, history3 = {};
+    const history = {}, history3 = {}, dailyBucketTotals = {};
     DIM_KEYS.forEach(dim=>{
-      history[dim] = []; history3[dim] = [];
+      history[dim] = []; history3[dim] = []; dailyBucketTotals[dim] = [];
       DATES.forEach(d=>{
         const dayRows = rows.filter(r=>r.report_date===d);
         if(dim==='visibility'){
@@ -2142,6 +2142,8 @@ function buildMetrics(){
           history[dim].push(avg(vals));
           const one = avg(vals);
           history3[dim].push(one==null ? {'0':0,'1':0} : {'1':one, '0':100-one});
+          const mentioned = vals.reduce((sum,v)=>sum+v,0)/100;
+          dailyBucketTotals[dim].push({buckets:{'1':mentioned, '0':vals.length-mentioned}, total:vals.length});
           return;
         }
         if(dim==='favorability'){
@@ -2154,6 +2156,10 @@ function buildMetrics(){
           // breakdown for the stacked-bar chart, unaffected by this.
           history[dim].push(entries.length ? avg(entries.map(x=>50 + (x.pos - x.neg)/2)) : null);
           history3[dim].push(entries.length ? {pos:avg(entries.map(x=>x.pos)), neu:avg(entries.map(x=>x.neu)), neg:avg(entries.map(x=>x.neg))} : {pos:0,neu:0,neg:0});
+          dailyBucketTotals[dim].push(entries.length ? {
+            buckets:{pos:entries.reduce((sum,x)=>sum+x.pos,0), neu:entries.reduce((sum,x)=>sum+x.neu,0), neg:entries.reduce((sum,x)=>sum+x.neg,0)},
+            total:entries.length*100
+          } : {buckets:{pos:0,neu:0,neg:0},total:0});
           return;
         }
         const field = dim==='narrative' ? 'narrative_alignment_score_'+side : dim+'_score_'+side;
@@ -2162,6 +2168,7 @@ function buildMetrics(){
         history3[dim].push(vals.length
           ? {'0':100*vals.filter(v=>v==='0').length/vals.length, '1':100*vals.filter(v=>v==='1').length/vals.length, '2':100*vals.filter(v=>v==='2').length/vals.length}
           : {'0':0,'1':0,'2':0});
+        dailyBucketTotals[dim].push({buckets:{'0':vals.filter(v=>v==='0').length, '1':vals.filter(v=>v==='1').length, '2':vals.filter(v=>v==='2').length},total:vals.length});
       });
     });
 
@@ -2172,7 +2179,7 @@ function buildMetrics(){
     rows.forEach(r=>{ const k=r.id+'|'+side; const gaps = NARR_GAPS_BY_ROW[k]; if(gaps){ gapDenom++; gaps.forEach(t=>{ gapCounts[t]=(gapCounts[t]||0)+1; }); } });
     const gaps = Object.entries(gapCounts).map(([topic,n])=>({topic, pctMissing: gapDenom? Math.round(100*n/gapDenom): 0})).sort((a,b)=>b.pctMissing-a.pctMissing);
 
-    METRICS[e.id] = {base, history, history3, bucketTotals, accCounts:{0:n0,1:n1,2:n2,total:accVals.length}, gaps};
+    METRICS[e.id] = {base, history, history3, bucketTotals, dailyBucketTotals, accCounts:{0:n0,1:n1,2:n2,total:accVals.length}, gaps};
   });
 }
 const WEIGHTS = {visibility:0.40,favorability:0.15,depth:0.15,accuracy:0.15,narrative:0.15};
@@ -3538,7 +3545,13 @@ function buildDimensionPage(key){
   if(key==='narrative' && detailedReady){ wireTopicComparison(); }
   if(key==='consistency' && detailedReady) wireConsistencyFlagged();
   if(hasRootCause && detailedReady) wireDimSource(key);
-  renderDimensionPage(key);
+  // Rendering is asynchronous because some views hydrate a compact detail index. Surface a
+  // controlled error instead of leaving a chart silently blank if that hydration fails.
+  renderDimensionPage(key).catch(error=>{
+    console.error('Dimension chart render failed', key, error);
+    const target=document.getElementById(key+'-cmp');
+    if(target) target.innerHTML='<div class="err-banner">Chart data could not load: '+escXHtml(String(error.message||error))+'</div>';
+  });
 }
 // The response-level aggregate is intentionally exhaustive.  Keep it out of the first-paint
 // path, but retain every existing evidence and drill-down capability when a reader asks for it.
@@ -3547,7 +3560,10 @@ async function loadDimensionDetail(key){
   if(pageEl) pageEl.insertAdjacentHTML('afterbegin','<div id="'+key+'-detail-loading" class="small-muted" style="padding:8px 0;">Loading detailed response evidence…</div>');
   try{
     await ensureFullScoreData();
-    buildDimensionPage(key);
+    // Accuracy has its own flagged-statement and priority sections. Preserve them after
+    // detailed evidence is loaded rather than rebuilding it as a generic dimension page.
+    if(key==='accuracy') buildAccuracyPage();
+    else buildDimensionPage(key);
     enhanceSelects(); collapseAllFilterbars();
   }catch(error){
     console.error('Detailed score data load failed',error);
@@ -3869,7 +3885,7 @@ function entityBucketTotals(ent, key, modelFilter, rangeOverride, blindOverride)
   // the browser parse every individual scored response before it can draw a chart.  Provider,
   // topic, and blind-only filters still intentionally use the detailed corpus because their
   // extra dimensions are not represented in this compact asset.
-  if(!FULL_SCORE_DATA_READY && !modelFilter && (blindOverride===undefined || blindOverride==='all') && Array.isArray(rangeOverride)){
+  if(!modelFilter && (blindOverride===undefined || blindOverride==='all') && Array.isArray(rangeOverride)){
     const daily = METRICS[ent.id] && METRICS[ent.id].dailyBucketTotals && METRICS[ent.id].dailyBucketTotals[key];
     if(Array.isArray(daily) && daily.length>=rangeOverride[1]+1){
       return mergeBucketTotals(daily.slice(rangeOverride[0], rangeOverride[1]+1));
