@@ -1,0 +1,567 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-07T01:29:02.055811+00:00",
+  "status": "passed",
+  "checks": [
+    {
+      "name": "score bootstrap has a supported browser contract",
+      "passed": true,
+      "detail": "schema=1 category=dashboard_score_bootstrap",
+      "blocking": true
+    },
+    {
+      "name": "score bootstrap retains daily denominators for date and kickoff views",
+      "passed": true,
+      "detail": "metric_sets=2 dates=58",
+      "blocking": true
+    },
+    {
+      "name": "score release has response rows",
+      "passed": true,
+      "detail": "2,492,935 rows",
+      "blocking": true
+    },
+    {
+      "name": "score dates equal bootstrap dates",
+      "passed": true,
+      "detail": "score=58 bootstrap=58",
+      "blocking": true
+    },
+    {
+      "name": "bootstrap source hash ties to raw score release",
+      "passed": true,
+      "detail": "expected=e91e688e2fa2df8fe740aefdb5726e53d79ec9d6588e69cc4a7ea7010144e34a actual=e91e688e2fa2df8fe740aefdb5726e53d79ec9d6588e69cc4a7ea7010144e34a",
+      "blocking": true
+    },
+    {
+      "name": "dashboard roster remains 107 races",
+      "passed": true,
+      "detail": "107 races",
+      "blocking": true
+    },
+    {
+      "name": "full score race universe ties to roster",
+      "passed": true,
+      "detail": "score=107 roster=107",
+      "blocking": true
+    },
+    {
+      "name": "candidate prompt-level visibility is sample-stable",
+      "passed": true,
+      "detail": "cells=173,358 conflicts=0",
+      "blocking": true
+    },
+    {
+      "name": "opponent prompt-level visibility is sample-stable",
+      "passed": true,
+      "detail": "cells=169,619 conflicts=0",
+      "blocking": true
+    },
+    {
+      "name": "only documented malformed score buckets occur",
+      "passed": true,
+      "detail": "unexpected=0",
+      "blocking": true
+    },
+    {
+      "name": "known malformed bucket is explicitly excluded",
+      "passed": true,
+      "detail": "documented=1",
+      "blocking": false
+    },
+    {
+      "name": "standard bootstrap has all visible entities",
+      "passed": true,
+      "detail": "missing=0",
+      "blocking": true
+    },
+    {
+      "name": "standard base metrics exactly tie to raw",
+      "passed": true,
+      "detail": "checked=1254 mismatches=0",
+      "blocking": true
+    },
+    {
+      "name": "include_refusals bootstrap has all visible entities",
+      "passed": true,
+      "detail": "missing=0",
+      "blocking": true
+    },
+    {
+      "name": "include_refusals base metrics exactly tie to raw",
+      "passed": true,
+      "detail": "checked=1254 mismatches=0",
+      "blocking": true
+    },
+    {
+      "name": "cross-workstream kickoff covers 107 tracked races",
+      "passed": true,
+      "detail": "races=107",
+      "blocking": true
+    },
+    {
+      "name": "cross-workstream kickoff uses only observed first checkpoints",
+      "passed": true,
+      "detail": "dates=2026-08-31, 2026-09-25",
+      "blocking": true
+    },
+    {
+      "name": "reference date snapshots are present",
+      "passed": true,
+      "detail": "missing=[]",
+      "blocking": true
+    },
+    {
+      "name": "Aggregate kickoff snapshot has all five party dimensions",
+      "passed": true,
+      "detail": "Democrats: visibility=77.7, favorability=50.6, depth=43.9, accuracy=53.6, narrative=55.5, composite=61.6; Republicans: visibility=76.9, favorability=49.0, depth=49.3, accuracy=55.4, narrative=49.0, composite=61.2",
+      "blocking": true
+    },
+    {
+      "name": "Aggregate 2026-10-11 snapshot has all five party dimensions",
+      "passed": true,
+      "detail": "Democrats: visibility=83.1, favorability=50.3, depth=51.8, accuracy=68.5, narrative=63.6, composite=68.4; Republicans: visibility=82.4, favorability=48.9, depth=51.4, accuracy=66.2, narrative=56.3, composite=66.4",
+      "blocking": true
+    },
+    {
+      "name": "Aggregate 2026-10-05 through 2026-10-11 snapshot has all five party dimensions",
+      "passed": true,
+      "detail": "Democrats: visibility=82.6, favorability=50.3, depth=52.7, accuracy=71.1, narrative=62.3, composite=68.5; Republicans: visibility=82.1, favorability=48.9, depth=53.4, accuracy=69.9, narrative=55.6, composite=67.0",
+      "blocking": true
+    },
+    {
+      "name": "citation release has rows",
+      "passed": true,
+      "detail": "1,254,100 rows",
+      "blocking": true
+    },
+    {
+      "name": "citation race universe ties to roster",
+      "passed": true,
+      "detail": "citation=107 roster=107",
+      "blocking": true
+    },
+    {
+      "name": "citation dates are ordered and usable",
+      "passed": true,
+      "detail": "citation=58 score=58",
+      "blocking": true
+    },
+    {
+      "name": "refresh reaches requested endpoint",
+      "passed": true,
+      "detail": "latest=2026-11-03 expected=2026-11-03",
+      "blocking": true
+    },
+    {
+      "name": "citation counts are non-negative",
+      "passed": true,
+      "detail": "invalid=0",
+      "blocking": true
+    },
+    {
+      "name": "all citation types have dashboard controls",
+      "passed": true,
+      "detail": "unexpected=",
+      "blocking": true
+    },
+    {
+      "name": "citation manifest ties to roster",
+      "passed": true,
+      "detail": "manifest=107 roster=107",
+      "blocking": true
+    },
+    {
+      "name": "citation manifest entries are usable",
+      "passed": true,
+      "detail": "invalid=0",
+      "blocking": true
+    },
+    {
+      "name": "citation first-paint asset has expected category",
+      "passed": true,
+      "detail": "category='citation_breakout_first_paint_global'",
+      "blocking": true
+    },
+    {
+      "name": "citation first-paint continuity ledger ties to 107 tracked races",
+      "passed": true,
+      "detail": "expected_dates=58 actual_dates=58",
+      "blocking": true
+    },
+    {
+      "name": "score release manifest has a supported availability contract",
+      "passed": true,
+      "detail": "source=gs://aeo-dashboard-assets-bullhorn/dashboard-data/score-releases/refresh-oct12-nov03-20261106-v2/release_manifest.json",
+      "blocking": true
+    },
+    {
+      "name": "score release declares Accuracy availability",
+      "passed": true,
+      "detail": "accuracy_status='partial_unadjudicated'",
+      "blocking": true
+    },
+    {
+      "name": "partial Accuracy release retains unadjudicated accounting",
+      "passed": true,
+      "detail": "races=10",
+      "blocking": true
+    },
+    {
+      "name": "score bootstrap contract supports published release labels",
+      "passed": true,
+      "detail": "present",
+      "blocking": true
+    },
+    {
+      "name": "Aggregate supports an explicit cross-workstream kickoff",
+      "passed": true,
+      "detail": "present",
+      "blocking": true
+    },
+    {
+      "name": "107-race exclusion is implemented",
+      "passed": true,
+      "detail": "present",
+      "blocking": true
+    },
+    {
+      "name": "race aliases are canonicalized",
+      "passed": true,
+      "detail": "present",
+      "blocking": true
+    },
+    {
+      "name": "invalid buckets are rejected",
+      "passed": true,
+      "detail": "present",
+      "blocking": true
+    },
+    {
+      "name": "citation controls use one filter function",
+      "passed": true,
+      "detail": "present",
+      "blocking": true
+    },
+    {
+      "name": "citation first paint requests the published release asset",
+      "passed": true,
+      "detail": "present",
+      "blocking": true
+    },
+    {
+      "name": "dimension comparison passes date cohort",
+      "passed": true,
+      "detail": "present",
+      "blocking": true
+    },
+    {
+      "name": "prompt-level rollups de-duplicate",
+      "passed": true,
+      "detail": "present",
+      "blocking": true
+    },
+    {
+      "name": "Site Analytics chart controls stay isolated",
+      "passed": true,
+      "detail": "present",
+      "blocking": true
+    },
+    {
+      "name": "metric freshness manifest uses the explicit release contract",
+      "passed": true,
+      "detail": "schema_version=2",
+      "blocking": true
+    },
+    {
+      "name": "metric freshness manifest declares requested through date",
+      "passed": true,
+      "detail": "requested_through='2026-11-03'",
+      "blocking": true
+    },
+    {
+      "name": "metric freshness target matches release endpoint",
+      "passed": true,
+      "detail": "manifest='2026-11-03'; release='2026-11-03'",
+      "blocking": true
+    },
+    {
+      "name": "metric freshness manifest declares required refreshed families",
+      "passed": true,
+      "detail": "required_updated=['score_dimensions_and_aggregate', 'citation_breakout', 'owned_domain_visibility_and_coverage', 'owned_domain_on_topic_citation_rate', 'owned_domain_citation_yield_and_peer_rank', 'owned_domain_answer_quality']",
+      "blocking": true
+    },
+    {
+      "name": "metric freshness manifest has a metrics registry",
+      "passed": true,
+      "detail": "source=dashboard_deploy/analysis/dashboard_metric_refresh_status_2026-11-06.json",
+      "blocking": true
+    },
+    {
+      "name": "metric freshness manifest covers every dashboard metric family",
+      "passed": true,
+      "detail": "missing=[]; extra=[]",
+      "blocking": true
+    },
+    {
+      "name": "metric freshness status is valid: citation_breakout",
+      "passed": true,
+      "detail": "state=updated",
+      "blocking": true
+    },
+    {
+      "name": "required metric is explicitly refreshed: citation_breakout",
+      "passed": true,
+      "detail": "state='updated'; requested=2026-11-03",
+      "blocking": true
+    },
+    {
+      "name": "updated metric has dated evidence: citation_breakout",
+      "passed": true,
+      "detail": "measured=2026-11-03; available=2026-11-03; asset='gs://aeo-dashboard-assets-bullhorn/dashboard-data/citation-releases/refresh-oct27-nov03-20261105-v1/release_manifest.json'; completeness='complete_with_declared_partial_dates'",
+      "blocking": true
+    },
+    {
+      "name": "required metric reaches release endpoint: citation_breakout",
+      "passed": true,
+      "detail": "measured=2026-11-03; requested=2026-11-03",
+      "blocking": true
+    },
+    {
+      "name": "metric freshness status is valid: owned_domain_answer_quality",
+      "passed": true,
+      "detail": "state=updated",
+      "blocking": true
+    },
+    {
+      "name": "required metric is explicitly refreshed: owned_domain_answer_quality",
+      "passed": true,
+      "detail": "state='updated'; requested=2026-11-03",
+      "blocking": true
+    },
+    {
+      "name": "updated metric has dated evidence: owned_domain_answer_quality",
+      "passed": true,
+      "detail": "measured=2026-11-03; available=2026-11-03; asset='gs://aeo-dashboard-assets-bullhorn/dashboard-data/owned-domain-releases/owned-domains-2026-11-06-v27/owned_domains_release.json'; completeness='complete'",
+      "blocking": true
+    },
+    {
+      "name": "required metric reaches release endpoint: owned_domain_answer_quality",
+      "passed": true,
+      "detail": "measured=2026-11-03; requested=2026-11-03",
+      "blocking": true
+    },
+    {
+      "name": "metric freshness status is valid: owned_domain_citation_yield_and_peer_rank",
+      "passed": true,
+      "detail": "state=updated",
+      "blocking": true
+    },
+    {
+      "name": "required metric is explicitly refreshed: owned_domain_citation_yield_and_peer_rank",
+      "passed": true,
+      "detail": "state='updated'; requested=2026-11-03",
+      "blocking": true
+    },
+    {
+      "name": "updated metric has dated evidence: owned_domain_citation_yield_and_peer_rank",
+      "passed": true,
+      "detail": "measured=2026-11-03; available=2026-11-03; asset='gs://aeo-dashboard-assets-bullhorn/dashboard-data/owned-domain-releases/owned-domains-2026-11-06-v27/owned_domains_release.json'; completeness='complete_with_declared_partial_dates'",
+      "blocking": true
+    },
+    {
+      "name": "required metric reaches release endpoint: owned_domain_citation_yield_and_peer_rank",
+      "passed": true,
+      "detail": "measured=2026-11-03; requested=2026-11-03",
+      "blocking": true
+    },
+    {
+      "name": "metric freshness status is valid: owned_domain_on_topic_citation_rate",
+      "passed": true,
+      "detail": "state=updated",
+      "blocking": true
+    },
+    {
+      "name": "required metric is explicitly refreshed: owned_domain_on_topic_citation_rate",
+      "passed": true,
+      "detail": "state='updated'; requested=2026-11-03",
+      "blocking": true
+    },
+    {
+      "name": "updated metric has dated evidence: owned_domain_on_topic_citation_rate",
+      "passed": true,
+      "detail": "measured=2026-11-03; available=2026-11-03; asset='gs://aeo-dashboard-assets-bullhorn/dashboard-data/owned-domain-releases/owned-domains-2026-11-06-v27/owned_domains_release.json'; completeness='complete_with_declared_partial_dates'",
+      "blocking": true
+    },
+    {
+      "name": "required metric reaches release endpoint: owned_domain_on_topic_citation_rate",
+      "passed": true,
+      "detail": "measured=2026-11-03; requested=2026-11-03",
+      "blocking": true
+    },
+    {
+      "name": "metric freshness status is valid: owned_domain_share_of_voice",
+      "passed": true,
+      "detail": "state=retained",
+      "blocking": true
+    },
+    {
+      "name": "stale metric has an explicit exception: owned_domain_share_of_voice",
+      "passed": true,
+      "detail": "last=2026-10-11; available=2026-11-03; reason='The November 3 raw-response cohort is complete and its full OpenAI-only source-reflection release is running separately. This deployment retains the last audited October 11 Share of Voice snapshot rather than presenting unvalidated partial model output as a current measurement.'",
+      "blocking": true
+    },
+    {
+      "name": "metric freshness status is valid: owned_domain_visibility_and_coverage",
+      "passed": true,
+      "detail": "state=updated",
+      "blocking": true
+    },
+    {
+      "name": "required metric is explicitly refreshed: owned_domain_visibility_and_coverage",
+      "passed": true,
+      "detail": "state='updated'; requested=2026-11-03",
+      "blocking": true
+    },
+    {
+      "name": "updated metric has dated evidence: owned_domain_visibility_and_coverage",
+      "passed": true,
+      "detail": "measured=2026-11-03; available=2026-11-03; asset='gs://aeo-dashboard-assets-bullhorn/dashboard-data/owned-domain-releases/owned-domains-2026-11-06-v27/owned_domains_release.json'; completeness='complete_with_declared_partial_dates'",
+      "blocking": true
+    },
+    {
+      "name": "required metric reaches release endpoint: owned_domain_visibility_and_coverage",
+      "passed": true,
+      "detail": "measured=2026-11-03; requested=2026-11-03",
+      "blocking": true
+    },
+    {
+      "name": "metric freshness status is valid: score_dimensions_and_aggregate",
+      "passed": true,
+      "detail": "state=updated",
+      "blocking": true
+    },
+    {
+      "name": "required metric is explicitly refreshed: score_dimensions_and_aggregate",
+      "passed": true,
+      "detail": "state='updated'; requested=2026-11-03",
+      "blocking": true
+    },
+    {
+      "name": "updated metric has dated evidence: score_dimensions_and_aggregate",
+      "passed": true,
+      "detail": "measured=2026-11-03; available=2026-11-03; asset='gs://aeo-dashboard-assets-bullhorn/dashboard-data/score-releases/refresh-oct12-nov03-20261106-v2/release_manifest.json'; completeness='complete'",
+      "blocking": true
+    },
+    {
+      "name": "required metric reaches release endpoint: score_dimensions_and_aggregate",
+      "passed": true,
+      "detail": "measured=2026-11-03; requested=2026-11-03",
+      "blocking": true
+    },
+    {
+      "name": "metric freshness status is valid: site_analytics_search_traffic",
+      "passed": true,
+      "detail": "state=retained",
+      "blocking": true
+    },
+    {
+      "name": "stale metric has an explicit exception: site_analytics_search_traffic",
+      "passed": true,
+      "detail": "last=2026-10-23; available=2026-10-23; reason='Search Console reporting is refreshed on its own cadence and is outside the Evertune score and citation delivery.'",
+      "blocking": true
+    },
+    {
+      "name": "dossier write-back receipt supplied",
+      "passed": true,
+      "detail": "missing --dossier-writeback-receipt",
+      "blocking": true
+    },
+    {
+      "name": "dossier write-back receipt has a supported release contract",
+      "passed": true,
+      "detail": "status='not_applicable_no_new_adjudicated_research'",
+      "blocking": true
+    },
+    {
+      "name": "no-research dossier disposition is explicit and bounded",
+      "passed": true,
+      "detail": "accuracy_status='partial_unadjudicated'; entries=[]",
+      "blocking": true
+    },
+    {
+      "name": "partner roster preflight supplied for Owned Domains refresh",
+      "passed": true,
+      "detail": "missing --partner-roster-preflight",
+      "blocking": true
+    },
+    {
+      "name": "partner roster preflight passed",
+      "passed": true,
+      "detail": "status='pass'",
+      "blocking": true
+    },
+    {
+      "name": "partner roster preflight records immutable workbook fingerprints",
+      "passed": true,
+      "detail": "courier_sha256='bdc67a1455402620ae30d537500d70dacede17640e70ea0425b920f4a37bc8eb'; heartland_sha256='98910483216c437dc567b13dad0372abda46d069117bc566ca372052ebb55224'",
+      "blocking": true
+    },
+    {
+      "name": "partner roster preflight covers Courier and Heartland Signal",
+      "passed": true,
+      "detail": "publishers=['Courier', 'Heartland Signal']",
+      "blocking": true
+    },
+    {
+      "name": "partner roster rows reconcile: Courier",
+      "passed": true,
+      "detail": "linked=64; registry=64",
+      "blocking": true
+    },
+    {
+      "name": "partner roster rows reconcile: Heartland Signal",
+      "passed": true,
+      "detail": "linked=30; registry=30",
+      "blocking": true
+    },
+    {
+      "name": "Owned Domains release supplied when its metrics are refreshed",
+      "passed": true,
+      "detail": "missing --owned-domain-release",
+      "blocking": true
+    },
+    {
+      "name": "Owned Domains release manifest has a supported contract",
+      "passed": true,
+      "detail": "artifact_category='owned_domains_dashboard_release_manifest'",
+      "blocking": true
+    },
+    {
+      "name": "Owned Domains release reaches the requested complete snapshot",
+      "passed": true,
+      "detail": "latest_complete='2026-11-03'; expected='2026-11-03'",
+      "blocking": true
+    },
+    {
+      "name": "Owned Domains release pins score, citation, and citation-detail sources",
+      "passed": true,
+      "detail": "sources=['citation_detail_release', 'citation_release', 'score_aggregate', 'score_release']",
+      "blocking": true
+    },
+    {
+      "name": "Owned Domains release includes every browser and audit asset",
+      "passed": true,
+      "detail": "missing=[]",
+      "blocking": true
+    },
+    {
+      "name": "Share of Voice release supplied when Share of Voice is refreshed",
+      "passed": true,
+      "detail": "not required",
+      "blocking": true
+    }
+  ],
+  "errors": [],
+  "warnings": []
+}

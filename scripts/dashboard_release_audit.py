@@ -12,6 +12,7 @@ import argparse
 import hashlib
 import json
 import math
+import re
 import subprocess
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -31,7 +32,7 @@ ALLOWED_INVALID_BUCKETS = {
 }
 DIMS = ("depth", "accuracy", "narrative", "consistency")
 METRIC_NAMES = ("visibility", "favorability", "depth", "accuracy", "narrative", "consistency")
-VALID_CITATION_TYPES = {"sources_cited", "sources_search", "sources_more", "sources_references"}
+VALID_CITATION_TYPES = {"sources_cited", "sources_search", "sources_more", "sources_references", "sources_shopping"}
 SNAPSHOT_DIMS = ("visibility", "favorability", "depth", "accuracy", "narrative")
 SNAPSHOT_WEIGHTS = {"visibility": 0.40, "favorability": 0.15, "depth": 0.15, "accuracy": 0.15, "narrative": 0.15}
 REQUIRED_METRIC_STATUS = {
@@ -45,6 +46,18 @@ REQUIRED_METRIC_STATUS = {
     "site_analytics_search_traffic",
 }
 VALID_METRIC_STATES = {"updated", "retained", "blocked", "not_applicable"}
+VALID_SOURCE_COMPLETENESS = {
+    "complete",
+    "complete_with_declared_partial_dates",
+}
+DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+OWNED_DOMAIN_METRIC_FAMILIES = {
+    "owned_domain_visibility_and_coverage",
+    "owned_domain_on_topic_citation_rate",
+    "owned_domain_citation_yield_and_peer_rank",
+    "owned_domain_answer_quality",
+    "owned_domain_share_of_voice",
+}
 
 
 def raw_score_dimension(dim):
@@ -428,7 +441,11 @@ def audit_dashboard_contract(audit, dashboard):
         audit.check(name, passed, "present" if passed else "required marker missing")
 
 
-def audit_metric_refresh_status(audit, source):
+def _is_iso_date(value):
+    return isinstance(value, str) and bool(DATE_RE.fullmatch(value))
+
+
+def audit_metric_refresh_status(audit, source, *, expected_through=None):
     """Require an explicit disposition for every dashboard metric family.
 
     A citation-only delivery must never be described as a full dashboard refresh by
@@ -437,10 +454,42 @@ def audit_metric_refresh_status(audit, source):
     date, the freshest available input date, and the concrete reason.
     """
     raw, _ = load_json(source)
+    audit.check(
+        "metric freshness manifest uses the explicit release contract",
+        isinstance(raw, dict) and raw.get("schema_version") == 2,
+        f"schema_version={raw.get('schema_version') if isinstance(raw, dict) else None}",
+    )
+    if not isinstance(raw, dict) or raw.get("schema_version") != 2:
+        return raw
+    requested_through = raw.get("requested_through")
+    audit.check(
+        "metric freshness manifest declares requested through date",
+        _is_iso_date(requested_through),
+        f"requested_through={requested_through!r}",
+    )
+    if expected_through:
+        audit.check(
+            "metric freshness target matches release endpoint",
+            requested_through == expected_through,
+            f"manifest={requested_through!r}; release={expected_through!r}",
+        )
+    required_updated = raw.get("required_updated")
+    valid_required_updated = (
+        isinstance(required_updated, list)
+        and bool(required_updated)
+        and all(isinstance(name, str) for name in required_updated)
+        and len(required_updated) == len(set(required_updated))
+        and set(required_updated) <= REQUIRED_METRIC_STATUS
+    )
+    audit.check(
+        "metric freshness manifest declares required refreshed families",
+        valid_required_updated,
+        f"required_updated={required_updated!r}",
+    )
     metrics = raw.get("metrics") if isinstance(raw, dict) else None
     audit.check("metric freshness manifest has a metrics registry", isinstance(metrics, dict), f"source={source}")
     if not isinstance(metrics, dict):
-        return
+        return raw
     missing = sorted(REQUIRED_METRIC_STATUS - set(metrics))
     extra = sorted(set(metrics) - REQUIRED_METRIC_STATUS)
     audit.check("metric freshness manifest covers every dashboard metric family", not missing, f"missing={missing}; extra={extra}")
@@ -450,12 +499,313 @@ def audit_metric_refresh_status(audit, source):
         audit.check(f"metric freshness status is valid: {name}", valid, f"state={row.get('state') if isinstance(row, dict) else None}")
         if not valid:
             continue
+        if valid_required_updated and name in required_updated:
+            audit.check(
+                f"required metric is explicitly refreshed: {name}",
+                row["state"] == "updated",
+                f"state={row['state']!r}; requested={requested_through}",
+            )
+        if row["state"] == "updated":
+            complete = all(
+                isinstance(row.get(field), str) and row.get(field)
+                for field in ("measured_through", "available_input_through", "release_asset", "source_completeness")
+            )
+            complete = complete and row.get("source_completeness") in VALID_SOURCE_COMPLETENESS
+            if row.get("source_completeness") == "complete_with_declared_partial_dates":
+                partial_dates = row.get("declared_partial_dates")
+                complete = complete and isinstance(partial_dates, list) and bool(partial_dates) and all(
+                    _is_iso_date(value) for value in partial_dates
+                )
+            audit.check(
+                f"updated metric has dated evidence: {name}", complete,
+                f"measured={row.get('measured_through')}; available={row.get('available_input_through')}; "
+                f"asset={row.get('release_asset')!r}; completeness={row.get('source_completeness')!r}",
+            )
+            if valid_required_updated and name in required_updated:
+                audit.check(
+                    f"required metric reaches release endpoint: {name}",
+                    row.get("measured_through") == requested_through,
+                    f"measured={row.get('measured_through')}; requested={requested_through}",
+                )
         if row["state"] in {"retained", "blocked"}:
             complete = all(isinstance(row.get(field), str) and row.get(field) for field in ("reason", "last_measured_through", "available_input_through"))
             audit.check(
                 f"stale metric has an explicit exception: {name}", complete,
                 f"last={row.get('last_measured_through')}; available={row.get('available_input_through')}; reason={row.get('reason')!r}",
             )
+    return raw
+
+
+def owned_domains_are_refreshed(metric_status):
+    """Whether this release actually rebuilt one or more owned-domain KPIs."""
+    metrics = metric_status.get("metrics", {}) if isinstance(metric_status, dict) else {}
+    return any(
+        isinstance(metrics.get(name), dict) and metrics[name].get("state") == "updated"
+        for name in OWNED_DOMAIN_METRIC_FAMILIES
+    )
+
+
+def audit_partner_roster_preflight(audit, source, *, required):
+    """Block an owned-domain refresh without the newly supplied partner rosters.
+
+    The roster audit is deliberately separate from the release asset: it proves
+    that the current Courier and Heartland committed-article exports were supplied
+    and reconciled before project denominators or topic coverage were rebuilt.
+    """
+    if not required:
+        audit.check(
+            "partner roster preflight is present when Owned Domains refreshes",
+            source is None or isinstance(source, str),
+            "not required because every Owned Domains metric is retained, blocked, or not applicable",
+            blocking=False,
+        )
+        return
+    audit.check(
+        "partner roster preflight supplied for Owned Domains refresh",
+        bool(source),
+        "missing --partner-roster-preflight",
+    )
+    if not source:
+        return
+    raw, _ = load_json(source)
+    valid_shape = isinstance(raw, dict) and raw.get("status") == "pass" and isinstance(raw.get("inputs"), dict)
+    audit.check(
+        "partner roster preflight passed",
+        valid_shape,
+        f"status={raw.get('status') if isinstance(raw, dict) else None!r}",
+    )
+    if not valid_shape:
+        return
+    inputs = raw["inputs"]
+    supplied = all(isinstance(inputs.get(field), str) and len(inputs[field]) == 64 for field in ("courier_sha256", "heartland_sha256"))
+    audit.check(
+        "partner roster preflight records immutable workbook fingerprints",
+        supplied,
+        f"courier_sha256={inputs.get('courier_sha256')!r}; heartland_sha256={inputs.get('heartland_sha256')!r}",
+    )
+    publishers = raw.get("publishers")
+    by_name = {row.get("publisher"): row for row in publishers} if isinstance(publishers, list) and all(isinstance(row, dict) for row in publishers) else {}
+    audit.check(
+        "partner roster preflight covers Courier and Heartland Signal",
+        set(by_name) == {"Courier", "Heartland Signal"},
+        f"publishers={sorted(by_name)}",
+    )
+    for publisher in ("Courier", "Heartland Signal"):
+        row = by_name.get(publisher, {})
+        linked, registered = row.get("linked_project_rows"), row.get("registry_rows")
+        audit.check(
+            f"partner roster rows reconcile: {publisher}",
+            isinstance(linked, int) and linked > 0 and linked == registered,
+            f"linked={linked}; registry={registered}",
+        )
+
+
+def audit_dossier_writeback(audit, source):
+    """Require an explicit dossier disposition for every score release.
+
+    A score refresh may legitimately contain no newly adjudicated provider research,
+    but that is a recorded decision, not a reason to silently omit the dossier
+    stage. Applied updates carry their review provenance; otherwise, only the
+    narrowly defined no-new-research disposition can pass.
+    """
+    audit.check(
+        "dossier write-back receipt supplied",
+        bool(source),
+        "missing --dossier-writeback-receipt",
+    )
+    if not source:
+        return
+    raw, _ = load_json(source)
+    valid_shape = (
+        isinstance(raw, dict)
+        and raw.get("schema_version") == 1
+        and raw.get("artifact_category") == "dossier_writeback_receipt"
+        and raw.get("status") in {"applied", "not_applicable_no_new_adjudicated_research"}
+        and raw.get("local_output_writes") is False
+        and isinstance(raw.get("source"), dict)
+        and isinstance(raw["source"].get("aggregate_manifest"), dict)
+        and isinstance(raw["source"]["aggregate_manifest"].get("object_name"), str)
+        and bool(raw["source"]["aggregate_manifest"]["object_name"])
+    )
+    audit.check(
+        "dossier write-back receipt has a supported release contract",
+        valid_shape,
+        f"status={raw.get('status') if isinstance(raw, dict) else None!r}",
+    )
+    if not valid_shape:
+        return
+    entries = raw.get("entries")
+    if raw["status"] == "applied":
+        valid_entries = (
+            isinstance(entries, list)
+            and bool(entries)
+            and all(
+                isinstance(entry, dict)
+                and all(isinstance(entry.get(field), str) and entry[field].strip()
+                        for field in ("dossier_path", "research_artifact", "summary"))
+                for entry in entries
+            )
+        )
+        audit.check(
+            "applied dossier write-back records source-backed entries",
+            valid_entries,
+            f"entries={len(entries) if isinstance(entries, list) else None}",
+        )
+    else:
+        valid_no_research = (
+            entries == []
+            and raw.get("accuracy_status") == "partial_unadjudicated"
+            and isinstance(raw.get("reason"), str)
+            and bool(raw["reason"].strip())
+        )
+        audit.check(
+            "no-research dossier disposition is explicit and bounded",
+            valid_no_research,
+            f"accuracy_status={raw.get('accuracy_status')!r}; entries={entries!r}",
+        )
+
+
+def audit_score_release_availability(audit, source):
+    """Check that a partial Accuracy refresh cannot masquerade as complete in the release gate."""
+
+    raw, _ = load_json(source)
+    audit.check(
+        "score release manifest has a supported availability contract",
+        isinstance(raw, dict) and raw.get("artifact_category") == "dashboard_score_release",
+        f"source={source}",
+    )
+    if not isinstance(raw, dict) or raw.get("artifact_category") != "dashboard_score_release":
+        return
+    status = raw.get("accuracy_status")
+    audit.check(
+        "score release declares Accuracy availability",
+        status in {"complete", "partial_unadjudicated"},
+        f"accuracy_status={status!r}",
+    )
+    if status == "partial_unadjudicated":
+        unadjudicated = raw.get("accuracy_unadjudicated")
+        audit.check(
+            "partial Accuracy release retains unadjudicated accounting",
+            isinstance(unadjudicated, dict) and bool(unadjudicated),
+            f"races={len(unadjudicated) if isinstance(unadjudicated, dict) else 0}",
+        )
+
+
+def _record_contract(record):
+    """Return whether an immutable public-object record has the required pin fields."""
+
+    return (
+        isinstance(record, dict)
+        and isinstance(record.get("object_name"), str)
+        and bool(record["object_name"])
+        and isinstance(record.get("generation"), (str, int))
+        and isinstance(record.get("bytes"), int)
+        and record["bytes"] >= 0
+        and isinstance(record.get("sha256"), str)
+        and len(record["sha256"]) == 64
+    )
+
+
+def audit_owned_domains_release(audit, source, *, required, expected_through):
+    """Ensure every refreshed Owned Domains KPI has one pinned source release.
+
+    Metric-freshness declarations alone are not enough: this checks the actual
+    public release manifest, its complete-snapshot boundary, and the four
+    browser assets that supply coverage, on-topic, yield/rank, and quality.
+    """
+
+    audit.check(
+        "Owned Domains release supplied when its metrics are refreshed",
+        bool(source) if required else source is None or isinstance(source, str),
+        "missing --owned-domain-release" if required else "not required",
+    )
+    if not source:
+        return
+    raw, _ = load_json(source)
+    valid = (
+        isinstance(raw, dict)
+        and raw.get("artifact_category") == "owned_domains_dashboard_release_manifest"
+        and isinstance(raw.get("sources"), dict)
+        and isinstance(raw.get("records"), dict)
+    )
+    audit.check(
+        "Owned Domains release manifest has a supported contract",
+        valid,
+        f"artifact_category={raw.get('artifact_category') if isinstance(raw, dict) else None!r}",
+    )
+    if not valid:
+        return
+    complete = raw.get("latest_complete_citation_snapshot")
+    audit.check(
+        "Owned Domains release reaches the requested complete snapshot",
+        isinstance(complete, str) and (not expected_through or complete == expected_through),
+        f"latest_complete={complete!r}; expected={expected_through!r}",
+    )
+    source_records = raw["sources"]
+    audit.check(
+        "Owned Domains release pins score, citation, and citation-detail sources",
+        all(_record_contract(source_records.get(name)) for name in ("citation_release", "score_release", "citation_detail_release", "score_aggregate")),
+        f"sources={sorted(source_records)}",
+    )
+    records = raw["records"]
+    required_assets = {
+        "owned_domains_release.json",
+        "owned_domains_detail.json",
+        "owned_domains_quality.json",
+        "owned_domains_audit.json",
+    }
+    audit.check(
+        "Owned Domains release includes every browser and audit asset",
+        required_assets <= set(records) and all(_record_contract(records.get(name)) for name in required_assets),
+        f"missing={sorted(required_assets - set(records))}",
+    )
+
+
+def audit_owned_voice_release(audit, source, *, required, expected_through):
+    """Block a deployment that marks Share of Voice refreshed without its release."""
+
+    audit.check(
+        "Share of Voice release supplied when Share of Voice is refreshed",
+        bool(source) if required else source is None or isinstance(source, str),
+        "missing --owned-voice-release" if required else "not required",
+    )
+    if not source:
+        return
+    raw, _ = load_json(source)
+    valid = (
+        isinstance(raw, dict)
+        and raw.get("artifact_category") == "owned_voice_release_manifest"
+        and raw.get("not_accuracy_or_causality") is True
+        and raw.get("raw_answer_storage") == "restricted_source_bucket_only"
+        and _record_contract(raw.get("owned_release"))
+        and isinstance(raw.get("public"), dict)
+        and isinstance(raw.get("private_audit"), dict)
+    )
+    audit.check(
+        "Share of Voice release manifest has a supported scope contract",
+        valid,
+        f"artifact_category={raw.get('artifact_category') if isinstance(raw, dict) else None!r}",
+    )
+    if not valid:
+        return
+    audit.check(
+        "Share of Voice release reaches the requested date",
+        isinstance(raw.get("date"), str) and (not expected_through or raw["date"] == expected_through),
+        f"date={raw.get('date')!r}; expected={expected_through!r}",
+    )
+    public = raw["public"]
+    audit.check(
+        "Share of Voice release includes pinned summary and detail assets",
+        all(_record_contract(public.get(name)) for name in ("summary", "detail")),
+        f"public={sorted(public)}",
+    )
+    private = raw["private_audit"]
+    required_audits = {"raw_answer_evidence.json", "candidate_scope.json", "source_scope.json", "openai_support.json", "structural_audit.json", "chart_audit.json"}
+    audit.check(
+        "Share of Voice release retains the required private audit trail",
+        required_audits <= set(private) and all(_record_contract(private.get(name)) for name in required_audits),
+        f"missing={sorted(required_audits - set(private))}",
+    )
 
 
 def main():
@@ -465,8 +815,13 @@ def main():
     parser.add_argument("--citation-summary", required=True)
     parser.add_argument("--citation-manifest")
     parser.add_argument("--citation-first-paint", help="Compact all-race Citation Breakout asset; validates its continuity ledger against the 107 tracked races.")
+    parser.add_argument("--score-release-manifest", help="Immutable dashboard score-release manifest; makes Accuracy availability explicit in the release audit.")
     parser.add_argument("--expected-through")
     parser.add_argument("--metric-status", required=True, help="Versioned metric-freshness manifest. Every metric family must be marked updated, retained, blocked, or not applicable.")
+    parser.add_argument("--partner-roster-preflight", help="Passed Courier/Heartland committed-article reconciliation. Required whenever an Owned Domains metric is refreshed.")
+    parser.add_argument("--dossier-writeback-receipt", required=True, help="Required post-aggregate disposition for source-backed dossier write-back.")
+    parser.add_argument("--owned-domain-release", help="Immutable Owned Domains public release manifest. Required whenever an Owned Domains metric is refreshed.")
+    parser.add_argument("--owned-voice-release", help="Immutable public Share of Voice release manifest. Required when Share of Voice is refreshed.")
     parser.add_argument("--dashboard", default="index.html")
     parser.add_argument("--report", required=True)
     args = parser.parse_args()
@@ -482,8 +837,33 @@ def main():
         audit_citations(audit, citation, manifest, races, dates, args.expected_through)
         if citation_first_paint is not None:
             audit_citation_first_paint(audit, citation, citation_first_paint)
+        if args.score_release_manifest:
+            audit_score_release_availability(audit, args.score_release_manifest)
         audit_dashboard_contract(audit, args.dashboard)
-        audit_metric_refresh_status(audit, args.metric_status)
+        metric_status = audit_metric_refresh_status(audit, args.metric_status, expected_through=args.expected_through)
+        audit_dossier_writeback(audit, args.dossier_writeback_receipt)
+        audit_partner_roster_preflight(
+            audit,
+            args.partner_roster_preflight,
+            required=owned_domains_are_refreshed(metric_status),
+        )
+        audit_owned_domains_release(
+            audit,
+            args.owned_domain_release,
+            required=owned_domains_are_refreshed(metric_status),
+            expected_through=args.expected_through,
+        )
+        voice_updated = (
+            isinstance(metric_status.get("metrics"), dict)
+            and isinstance(metric_status["metrics"].get("owned_domain_share_of_voice"), dict)
+            and metric_status["metrics"]["owned_domain_share_of_voice"].get("state") == "updated"
+        )
+        audit_owned_voice_release(
+            audit,
+            args.owned_voice_release,
+            required=voice_updated,
+            expected_through=args.expected_through,
+        )
     except Exception as exc:
         audit.check("audit execution", False, f"{type(exc).__name__}: {exc}")
     report = audit.payload()

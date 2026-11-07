@@ -1,0 +1,85 @@
+{
+  "schema_version": 2,
+  "purpose": "Required metric-freshness disposition for the October 12-November 3 scoring, citation, Owned Domains, and Share of Voice refresh. An unavailable input is an explicit exception, never an omitted metric or a zero.",
+  "requested_through": "2026-11-03",
+  "required_updated": [
+    "score_dimensions_and_aggregate",
+    "citation_breakout",
+    "owned_domain_visibility_and_coverage",
+    "owned_domain_on_topic_citation_rate",
+    "owned_domain_citation_yield_and_peer_rank",
+    "owned_domain_answer_quality"
+  ],
+  "metrics": {
+    "score_dimensions_and_aggregate": {
+      "state": "updated",
+      "measured_through": "2026-11-03",
+      "available_input_through": "2026-11-03",
+      "source_completeness": "complete",
+      "release_asset": "gs://aeo-dashboard-assets-bullhorn/dashboard-data/score-releases/refresh-oct12-nov03-20261106-v2/release_manifest.json",
+      "accuracy_status": "partial_unadjudicated",
+      "note": "The requested refresh scores every covered day and preserves the explicitly approved partial-unadjudicated Accuracy status. New Tier 1/Tier 2 research was not authorized for this run."
+    },
+    "citation_breakout": {
+      "state": "updated",
+      "measured_through": "2026-11-03",
+      "available_input_through": "2026-11-03",
+      "source_completeness": "complete_with_declared_partial_dates",
+      "declared_partial_dates": [
+        "2026-10-26"
+      ],
+      "release_asset": "gs://aeo-dashboard-assets-bullhorn/dashboard-data/citation-releases/refresh-oct27-nov03-20261105-v1/release_manifest.json"
+    },
+    "owned_domain_visibility_and_coverage": {
+      "state": "updated",
+      "measured_through": "2026-11-03",
+      "available_input_through": "2026-11-03",
+      "source_completeness": "complete_with_declared_partial_dates",
+      "declared_partial_dates": [
+        "2026-10-26"
+      ],
+      "release_asset": "gs://aeo-dashboard-assets-bullhorn/dashboard-data/owned-domain-releases/owned-domains-2026-11-06-v27/owned_domains_release.json"
+    },
+    "owned_domain_on_topic_citation_rate": {
+      "state": "updated",
+      "measured_through": "2026-11-03",
+      "available_input_through": "2026-11-03",
+      "source_completeness": "complete_with_declared_partial_dates",
+      "declared_partial_dates": [
+        "2026-10-26"
+      ],
+      "release_asset": "gs://aeo-dashboard-assets-bullhorn/dashboard-data/owned-domain-releases/owned-domains-2026-11-06-v27/owned_domains_release.json"
+    },
+    "owned_domain_citation_yield_and_peer_rank": {
+      "state": "updated",
+      "measured_through": "2026-11-03",
+      "available_input_through": "2026-11-03",
+      "source_completeness": "complete_with_declared_partial_dates",
+      "declared_partial_dates": [
+        "2026-10-26"
+      ],
+      "release_asset": "gs://aeo-dashboard-assets-bullhorn/dashboard-data/owned-domain-releases/owned-domains-2026-11-06-v27/owned_domains_release.json"
+    },
+    "owned_domain_answer_quality": {
+      "state": "updated",
+      "measured_through": "2026-11-03",
+      "available_input_through": "2026-11-03",
+      "source_completeness": "complete",
+      "release_asset": "gs://aeo-dashboard-assets-bullhorn/dashboard-data/owned-domain-releases/owned-domains-2026-11-06-v27/owned_domains_release.json",
+      "note": "The score release carries its approved partial-unadjudicated Accuracy status; no missing Accuracy research is represented as a zero."
+    },
+    "owned_domain_share_of_voice": {
+      "state": "retained",
+      "last_measured_through": "2026-10-11",
+      "available_input_through": "2026-11-03",
+      "reason": "The November 3 raw-response cohort is complete and its full OpenAI-only source-reflection release is running separately. This deployment retains the last audited October 11 Share of Voice snapshot rather than presenting unvalidated partial model output as a current measurement.",
+      "release_asset": "gs://aeo-dashboard-assets-bullhorn/dashboard-data/owned-voice-releases/observed-oct11-20261018-v1/release_manifest.json"
+    },
+    "site_analytics_search_traffic": {
+      "state": "retained",
+      "last_measured_through": "2026-10-23",
+      "available_input_through": "2026-10-23",
+      "reason": "Search Console reporting is refreshed on its own cadence and is outside the Evertune score and citation delivery."
+    }
+  }
+}
