@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-11-07T01:29:02.055811+00:00",
+  "generated_at": "2026-11-07T01:39:15.631748+00:00",
   "status": "passed",
   "checks": [
     {
@@ -402,13 +402,13 @@
     {
       "name": "metric freshness status is valid: owned_domain_share_of_voice",
       "passed": true,
-      "detail": "state=retained",
+      "detail": "state=blocked",
       "blocking": true
     },
     {
       "name": "stale metric has an explicit exception: owned_domain_share_of_voice",
       "passed": true,
-      "detail": "last=2026-10-11; available=2026-11-03; reason='The November 3 raw-response cohort is complete and its full OpenAI-only source-reflection release is running separately. This deployment retains the last audited October 11 Share of Voice snapshot rather than presenting unvalidated partial model output as a current measurement.'",
+      "detail": "last=2026-10-11; available=2026-11-03; reason='The complete November 3 raw-response cohort was submitted once to the OpenAI-only source-reflection release. Three candidate-scope judgments did not validate, so the publisher rejected the cohort and no November 3 Share of Voice asset was released. The dashboard retains the last audited October 11 snapshot rather than presenting an incomplete or re-run model cohort as current.'",
       "blocking": true
     },
     {
