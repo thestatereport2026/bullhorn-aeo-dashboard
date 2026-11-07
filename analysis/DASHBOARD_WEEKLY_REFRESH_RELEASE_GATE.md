@@ -114,10 +114,13 @@ following receipts before a dashboard candidate can be prepared:
   validates the snapshot's raw files, dates, provider coverage, exact-row deduplication, and
   cited-answer pairing against the scoring and citation universes. **If that audit passes, run
   the full current-snapshot Share of Voice release automatically** using the approved model and
-  record its audited public manifest in the metric-freshness file. Share of Voice may be marked
-  retained only when the independent audit cannot establish a complete eligible cohort; it may
-  never be omitted or recomputed from citation-only data. Keep raw answers and model checkpoints
-  in restricted cloud storage, and publish only the aggregate and permitted drilldown evidence.
+  record its audited public manifest in the metric-freshness file. Keep raw answers and model
+  checkpoints in restricted cloud storage, and publish only the aggregate and permitted
+  drilldown evidence. The Cloud Run job must have automatic task retries disabled: a model
+  validation failure produces a restricted checkpoint and a `blocked` metric disposition, not a
+  second paid submission of the full cohort. A later narrow retry needs an explicit review of the
+  restricted receipt and a fresh authorization. Share of Voice may never be omitted or recomputed
+  from citation-only data.
 
 ```sh
 python3 scripts/dashboard_release_audit.py \
