@@ -49,6 +49,7 @@ VALID_METRIC_STATES = {"updated", "retained", "blocked", "not_applicable"}
 VALID_SOURCE_COMPLETENESS = {
     "complete",
     "complete_with_declared_partial_dates",
+    "complete_with_approved_exclusions",
 }
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 OWNED_DOMAIN_METRIC_FAMILIES = {
@@ -516,6 +517,17 @@ def audit_metric_refresh_status(audit, source, *, expected_through=None):
                 complete = complete and isinstance(partial_dates, list) and bool(partial_dates) and all(
                     _is_iso_date(value) for value in partial_dates
                 )
+            if row.get("source_completeness") == "complete_with_approved_exclusions":
+                exclusions = row.get("approved_exclusions")
+                complete = complete and (
+                    isinstance(exclusions, dict)
+                    and exclusions.get("reason") == "candidate_scope_validation_failure"
+                    and isinstance(exclusions.get("count"), int)
+                    and 1 <= exclusions["count"] <= 3
+                    and isinstance(exclusions.get("cohort_pairs_before"), int)
+                    and isinstance(exclusions.get("cohort_pairs_after"), int)
+                    and exclusions["cohort_pairs_after"] + exclusions["count"] == exclusions["cohort_pairs_before"]
+                )
             audit.check(
                 f"updated metric has dated evidence: {name}", complete,
                 f"measured={row.get('measured_through')}; available={row.get('available_input_through')}; "
@@ -799,6 +811,29 @@ def audit_owned_voice_release(audit, source, *, required, expected_through):
         all(_record_contract(public.get(name)) for name in ("summary", "detail")),
         f"public={sorted(public)}",
     )
+    if _record_contract(public.get("summary")):
+        summary_source = "gs://aeo-dashboard-assets-bullhorn/" + public["summary"]["object_name"]
+        summary, _ = load_json(summary_source)
+        exclusions = (
+            summary.get("source", {}).get("candidate_scope_exclusions")
+            if isinstance(summary, dict) and isinstance(summary.get("source"), dict)
+            else None
+        )
+        if exclusions is not None:
+            valid_exclusions = (
+                isinstance(exclusions, dict)
+                and exclusions.get("reason") == "candidate_scope_validation_failure"
+                and isinstance(exclusions.get("excluded_pair_count"), int)
+                and 1 <= exclusions["excluded_pair_count"] <= 3
+                and isinstance(exclusions.get("cohort_pairs_before"), int)
+                and isinstance(exclusions.get("cohort_pairs_after"), int)
+                and exclusions["cohort_pairs_after"] + exclusions["excluded_pair_count"] == exclusions["cohort_pairs_before"]
+            )
+            audit.check(
+                "Share of Voice approved exclusions are bounded and declared",
+                valid_exclusions,
+                f"exclusions={exclusions!r}",
+            )
     private = raw["private_audit"]
     required_audits = {"raw_answer_evidence.json", "candidate_scope.json", "source_scope.json", "openai_support.json", "structural_audit.json", "chart_audit.json"}
     audit.check(

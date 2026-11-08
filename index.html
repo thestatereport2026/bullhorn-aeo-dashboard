@@ -2652,6 +2652,23 @@ document.querySelectorAll('.nav-item').forEach(item=>{
     }
     if(!PAGE_BUILT[page] && PAGE_BUILD[page]){
       const pageEl=document.getElementById('page-'+page);
+      // Prompt Fanout is the one score page that is inherently response-level: its rows are
+      // individual prompt × day/model observations and its drill-ins expose sampled responses.
+      // The compact bootstrap deliberately omits those rows to keep the initial dashboard fast,
+      // so do not build this page until the immutable response-level score release is available.
+      // Previously this page was built against an empty PROMPTS array after the bootstrap
+      // migration, leaving a convincing-but-empty table rather than a usable fanout view.
+      if(page==='fanout' && !FULL_SCORE_DATA_READY){
+        pageEl.innerHTML='<div class="small-muted" style="padding:40px;text-align:center;">Loading prompt-level score data…</div>';
+        try{
+          await ensureFullScoreData();
+        }catch(error){
+          console.error('Prompt Fanout data load failed', error);
+          pageEl.innerHTML=`<div class="err-banner">Prompt Fanout could not load its detailed score data. <button type="button" id="fanout-retry-load" style="margin-left:8px;padding:6px 10px;border:1px solid #B23B3B;border-radius:5px;background:#fff;color:#8f2222;cursor:pointer;">Retry</button></div>`;
+          document.getElementById('fanout-retry-load')?.addEventListener('click',()=>item.click());
+          return;
+        }
+      }
       // Dimension pages deliberately paint from the 10 MB score bootstrap first.  Waiting here
       // used to make the very first dimension click download, JSON-parse, and object-index the
       // 282 MB response-level aggregate before rendering a single chart.  That made Visibility

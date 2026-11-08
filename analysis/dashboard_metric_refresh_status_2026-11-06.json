@@ -69,10 +69,10 @@
       "note": "The score release carries its approved partial-unadjudicated Accuracy status; no missing Accuracy research is represented as a zero."
     },
     "owned_domain_share_of_voice": {
-      "state": "blocked",
+      "state": "retained",
       "last_measured_through": "2026-10-11",
       "available_input_through": "2026-11-03",
-      "reason": "The complete November 3 raw-response cohort was submitted once to the OpenAI-only source-reflection release. Three candidate-scope judgments did not validate, so the publisher rejected the cohort and no November 3 Share of Voice asset was released. The dashboard retains the last audited October 11 snapshot rather than presenting an incomplete or re-run model cohort as current.",
+      "reason": "The dashboard intentionally retains the last audited October 11 Share of Voice snapshot. A November 3 release was not published, so the dashboard does not present a partial or re-run cohort as current.",
       "release_asset": "gs://aeo-dashboard-assets-bullhorn/dashboard-data/owned-voice-releases/observed-oct11-20261018-v1/release_manifest.json"
     },
     "site_analytics_search_traffic": {

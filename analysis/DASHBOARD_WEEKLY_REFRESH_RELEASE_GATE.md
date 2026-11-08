@@ -91,6 +91,17 @@ following receipts before a dashboard candidate can be prepared:
   additional research is not authorized, unresolved claims remain `null` and the aggregate and
   dashboard candidate must carry `accuracy_status: partial_unadjudicated`. They must never
   trigger a Tier 1 or Tier 2 batch implicitly, or be shown as a complete Accuracy refresh.
+- **Accuracy spend forecast and approval:** after the Response Hypothesis gate has fixed the
+  exact eligible population, run Accuracy Step 1 in `--prepare` mode first. Present the resulting
+  strict cost upper bound, selected-row count, provider-request count, model, and sampling window
+  to the operator. Do **not** submit paid Accuracy work until the operator explicitly approves a
+  dollar ceiling for that exact forecast. Record the approved ceiling and an authorization
+  reference in the immutable state receipt. Tier 1 and Tier 2 research are separate paid stages:
+  after their claim populations have been planned, forecast each stage again and obtain a new
+  approval before it can submit. A prior approval for Step 1 never authorizes escalation work,
+  retries, a larger date window, or a changed model. The production Step 1 and canonical Tier 1
+  runners enforce this contract with `--approved-cost-cap-usd` and `--approval-reference`; a
+  missing approval is a safe stop, not a reason to guess a budget or repeat a request.
 - **Prompt diagnostics:** refresh the prompt diagnostics asset from the same score release, or
   mark it retained with its last measured date and a reason in the metric-freshness manifest.
 - **Dossier write-back:** immediately after the aggregate succeeds, run
@@ -100,7 +111,10 @@ following receipts before a dashboard candidate can be prepared:
   adjudicated research was in scope, the script can issue only the explicit
   `not_applicable_no_new_adjudicated_research` receipt. The release audit requires this receipt,
   so a completed research batch cannot be deployed while its findings remain only in transient
-  scoring artifacts.
+  scoring artifacts. Treat `not_applicable_no_new_adjudicated_research` as a documented outcome
+  only when no new Tier 1/Tier 2 research was authorized. Otherwise the receipt must be `applied`
+  and enumerate the reviewed dossier updates. This receipt is mandatory for every refresh, even
+  when the dashboard can technically render without new research.
 - **Partner project rosters:** before any Courier or Heartland Signal KPI is rebuilt, explicitly
   ask the operator for the newest committed-article exports from both publishers. Reconcile the
   supplied URLs against the confirmed-project registry and reviewed topic crosswalk with
