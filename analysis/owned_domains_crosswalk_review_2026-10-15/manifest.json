@@ -1,5 +1,5 @@
 {
-  "release_path": "/Users/rithvikagastya/AEO-Dashboard-Audit/dashboard_data/dist/owned_domains_release.json",
+  "release_path": "<AEO_DASHBOARD_DATA_ROOT>/owned_domains_release.json",
   "prompt_rows": 2610,
   "article_rows": 660,
   "status": "seeded_queues_only",
